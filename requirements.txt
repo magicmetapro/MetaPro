@@ -1,6 +1,5 @@
 streamlit
 google-generativeai
-streamlit
 Pillow
 piexif
 streamlit
@@ -18,5 +17,11 @@ pydrive
 pytz
 pydrive2
 uuid
+svglib
+reportlab
+Wand
+pandas
+openpyxl
+xlsxwriter
 fpdf
 fpdf2

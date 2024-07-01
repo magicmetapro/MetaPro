@@ -1,5 +1,9 @@
+
+
 import streamlit as st
 import os
+
+# Assuming the menu function is defined in a module named 'menu'
 from menu import menu
 
 # Apply custom styling
@@ -35,7 +39,7 @@ def authenticate(username, password):
         st.session_state.authenticated = True
         st.session_state.role = "super-admin"  # Directly set the role to "super-admin"
         set_lock("logged_in")
-        st.experimental_rerun()
+        st.session_state.rerun = True
     else:
         st.error("Incorrect username or password")
 
@@ -67,6 +71,10 @@ if not st.session_state.authenticated:
 
 # If authenticated, show the menu and additional information
 if st.session_state.authenticated:
+    if st.session_state.rerun:
+        st.session_state.rerun = False
+        st.rerun()
+
     menu()  # Render the dynamic menu
 
     # Logout button in the sidebar
@@ -75,7 +83,6 @@ if st.session_state.authenticated:
         st.session_state.role = None
         set_lock("")
         st.success("Logged out successfully.")
-        st.experimental_rerun()
 
     # Additional Information
     st.markdown("### Why Choose MetaPro?")

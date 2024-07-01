@@ -38,11 +38,20 @@ def menu():
     """, unsafe_allow_html=True)
 
     # Render buttons in the sidebar
-    if st.sidebar.button("Page 1", key="gdrive", help="Go to Page 1"):
+    if st.sidebar.button("Page 1", key="page1", help="Go to Page 1"):
         st.session_state.page = "Page 1"
     st.sidebar.markdown('<div class="spacing"></div>', unsafe_allow_html=True)  # Add space between buttons
-    if st.sidebar.button("Page 2", key="sftp", help="Go to Page 2"):
+    if st.sidebar.button("Page 2", key="gdrive", help="Go to Page 2"):
         st.session_state.page = "Page 2"
+    st.sidebar.markdown('<div class="spacing"></div>', unsafe_allow_html=True)
+    if st.sidebar.button("Page 3", key="sftp", help="Go to Page 3"):
+        st.session_state.page = "Page 3"
+    st.sidebar.markdown('<div class="spacing"></div>', unsafe_allow_html=True)
+    if st.sidebar.button("Page 4", key="prompts", help="Go to Page 4"):
+        st.session_state.page = "Page 4"
+    st.sidebar.markdown('<div class="spacing"></div>', unsafe_allow_html=True)
+    if st.sidebar.button("Page 5", key="enhanced", help="Go to Page 5"):
+        st.session_state.page = "Page 5"
 
     # Display the selected page
     if st.session_state.page == "Page 1":
@@ -51,3 +60,15 @@ def menu():
     elif st.session_state.page == "Page 2":
         import pages.page2 as page2
         page2.show()
+    elif st.session_state.page == "Page 3":
+        import pages.page3 as page3
+        page3.show()
+    elif st.session_state.page == "Page 4":
+        import pages.page4 as page4
+        page4.show()
+    elif st.session_state.page == "Page 5":
+        import pages.page5 as page5
+        page5.show()
+
+if __name__ == "__main__":
+    menu()

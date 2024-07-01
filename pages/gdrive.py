@@ -58,7 +58,7 @@ def normalize_text(text):
 
 # Function to generate metadata for images using AI model
 def generate_metadata(model, img):
-    caption = model.generate_content(["As the helpful Digital Asset Metadata Manager, analyze the following image and generate search engine optimized titles for stock photography. Create a descriptive title in English, up to 12 words long, that identifies the main elements of the image. Highlight the primary subjects, objects, activities, and context. Refine the title to include relevant keywords for SEO, ensuring it is engaging and informative. Avoid mentioning human names, brand names, product names, or company names.", img])
+    caption = model.generate_content(["As a helpful Digital Asset Metadata Manager, analyze the following image and generate one search engine optimized (SEO) title for stock photography. Create a descriptive title in English that identifies the main elements of the image by highlighting the primary subjects, objects, activities, and context. Refine the title to include relevant keywords for SEO, ensuring it is engaging and informative. Avoid mentioning human names, brand names, product names, or company names.", img])
     tags = model.generate_content(["Generate up to 45 keywords in English that are relevant to the image (each keyword must be one word, separated by commas). Ensure each keyword is a single word, separated by commas.", img])
 
     # Filter out undesirable characters from the generated tags
@@ -144,14 +144,6 @@ def upload_to_drive(zip_file_path, credentials):
         st.error(f"An error occurred while uploading to Google Drive: {e}")
         st.error(traceback.format_exc())
         return None
-
-def generate_description(model, img):
-    description = model.generate_content(["Generate very detailed descriptive description for stock photo related to (Concept). dont use words : The photo shows ", img])
-    return description.text.strip()
-
-def format_midjourney_prompt(description):
-    prompt_text = f"{description} -ar 16:9"
-    return prompt_text
 
 def main():
     """Main function for the Streamlit app."""

@@ -286,7 +286,7 @@ def main():
                             zip_file_path = zip_processed_images(processed_image_paths)
 
                             if zip_file_path:
-                                st.success(f"Successfully zipped processed {zip_file_path}")
+                               # st.success(f"Successfully zipped processed {zip_file_path}")
 
                                 # Upload zip file to Google Drive and get the shareable link
                                 credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/drive.file'])

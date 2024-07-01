@@ -1,9 +1,6 @@
 
-
 import streamlit as st
 import os
-
-# Assuming the menu function is defined in a module named 'menu'
 from menu import menu
 
 # Apply custom styling

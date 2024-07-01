@@ -1,8 +1,8 @@
 import streamlit as st
 import os
 
-# Assuming the menu_with_redirect function is defined in a module named 'menu'
-from menu import menu_with_redirect as menu
+# Import the menu_with_redirect function from menu module
+from menu import menu_with_redirect
 
 # Apply custom styling
 st.markdown("""
@@ -73,7 +73,7 @@ if st.session_state.authenticated:
         st.session_state.rerun = False
         st.rerun()
 
-    menu()  # Render the dynamic menu
+    menu_with_redirect()  # Render the dynamic menu
 
     # Logout button in the sidebar
     if st.sidebar.button("Logout"):

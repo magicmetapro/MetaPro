@@ -47,6 +47,9 @@ def generate_metadata(model, img):
 
     # Filter out undesirable characters from the generated tags
     filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
+
+    # Convert all tags to lowercase
+    filtered_tags = filtered_tags.lower()
     
     # Trim the generated keywords if they exceed 49 words
     keywords = filtered_tags.split(',')[:49]  # Limit to 49 words

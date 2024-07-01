@@ -18,3 +18,5 @@ pydrive
 pytz
 pydrive2
 uuid
+fpdf
+fpdf2

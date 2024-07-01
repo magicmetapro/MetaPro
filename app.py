@@ -1,4 +1,7 @@
+
 import streamlit as st
+
+# Assuming the menu function is defined in a module named 'menu'
 from menu import menu
 
 # Apply custom styling
@@ -32,7 +35,7 @@ if "rerun" not in st.session_state:
 def authenticate(username, password):
     if username == USERNAME and password == PASSWORD:
         st.session_state.authenticated = True
-        st.session_state.role = "super-admin"
+        st.session_state.role = "super-admin"  # Directly set the role to "super-admin"
         st.session_state.rerun = True
     else:
         st.error("Incorrect username or password")
@@ -49,7 +52,7 @@ if not st.session_state.authenticated:
 if st.session_state.authenticated:
     if st.session_state.rerun:
         st.session_state.rerun = False
-        st.experimental_rerun()
+        st.rerun()
 
     menu()  # Render the dynamic menu
 
@@ -62,6 +65,7 @@ if st.session_state.authenticated:
     # Additional Information
     st.markdown("### Why Choose MetaPro?")
     st.markdown("""
+
     **Website-based:** Easy to use and compatible with any operating system: Windows, macOS, Linux, and Android.
     
     **AI-Powered Precision:** Generate highly relevant and descriptive titles and tags for your images with high accuracy and relevance.
@@ -99,4 +103,5 @@ if st.session_state.authenticated:
       **✓.** Customizable: Manually generate titles and tags with your own commands
     
     **Ready to revolutionize your workflow? Subscribe today and take the first step towards a smarter, more efficient image management solution.**
+
     """)

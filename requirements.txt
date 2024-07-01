@@ -20,4 +20,3 @@ pydrive2
 uuid
 fpdf
 fpdf2
-mega.py

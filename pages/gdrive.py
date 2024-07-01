@@ -151,7 +151,7 @@ def main():
     # Display WhatsApp chat link
     st.markdown("""
     <div style="text-align: center; margin-top: 20px;">
-        <a href="https://wa.me/6285328007533" target="_blank">
+        <a href="https://wa.me/6282265298845" target="_blank">
             <button style="background-color: #1976d2; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
                 MetaPro
             </button>

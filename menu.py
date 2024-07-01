@@ -1,5 +1,8 @@
 import streamlit as st
-from pages import gdrive, sftp, prompts, enhanced
+import pages.gdrive
+import pages.sftp
+import pages.prompts
+import pages.enhanced
 
 def menu():
     # Create a sidebar for navigation
@@ -7,10 +10,10 @@ def menu():
     
     # Define a dictionary of page names and corresponding functions
     pages = {
-        "Google Drive": gdrive.show,
-        "SFTP": sftp.show,
-        "Prompts": prompts.show,
-        "Enhanced": enhanced.show
+        "Google Drive": pages.gdrive.show,
+        "SFTP": pages.sftp.show,
+        "Prompts": pages.prompts.show,
+        "Enhanced": pages.enhanced.show
     }
     
     # Get user selection from the sidebar
@@ -23,6 +26,3 @@ def menu():
     st.sidebar.markdown("## Additional Links")
     st.sidebar.markdown("[Streamlit Documentation](https://docs.streamlit.io)")
     st.sidebar.markdown("[GitHub Repository](https://github.com)")
-
-# Assuming the following functions are defined in the respective page modules:
-# gdrive.py, sftp.py, prompts.py, enhanced.py

@@ -1,24 +1,51 @@
 import streamlit as st
 
-def page1():
-    st.title("Page 1")
-    st.write("Welcome to Page 1")
+def authenticated_menu():
+    # Show a navigation menu for authenticated users
+    st.sidebar.page_link("app.py", label="Home", icon="🏠")
+    st.sidebar.page_link("pages/gdrive.py", label="Upload via Gdrive", icon="🌍")
+    st.sidebar.page_link("pages/sftp.py", label="Upload via SFTP", icon="🚀")
+    st.sidebar.page_link("pages/prompts.py", label="Magic Prompts", icon="✨")
+    st.sidebar.page_link("pages/enhanced.py", label="Enhanced Images", icon="🖼️")
 
-def page2():
-    st.title("Page 2")
-    st.write("Welcome to Page 2")
 
-def page3():
-    st.title("Page 3")
-    st.write("Welcome to Page 3")
+def unauthenticated_menu():
+    # Show a navigation menu for unauthenticated users
+    st.sidebar.page_link("app.py", label="Log in", icon="🔒")
+
 
 def menu():
-    st.sidebar.title("Menu")
-    page = st.sidebar.radio("Select a page", ["Page 1", "Page 2", "Page 3"])
+    # Determine if a user is logged in or not, then show the correct
+    # navigation menu
+    if "role" not in st.session_state or st.session_state.role is None:
+        unauthenticated_menu()
+        return
+    authenticated_menu()
 
-    if page == "Page 1":
-        page1()
-    elif page == "Page 2":
-        page2()
-    elif page == "Page 3":
-        page3()
+
+def menu_with_redirect():
+    # Redirect users to the main page if not logged in, otherwise continue to
+    # render the navigation menu
+    if "role" not in st.session_state or st.session_state.role is None:
+        st.switch_page("app.py")
+    menu()
+
+
+def menu():
+    # Determine if a user is logged in or not, then show the correct
+    # navigation menu
+    if "role" not in st.session_state or st.session_state.role is None:
+        unauthenticated_menu()
+        return
+    authenticated_menu()
+
+
+def menu_with_redirect():
+    # Redirect users to the main page if not logged in, otherwise continue to
+    # render the navigation menu
+    if "role" not in st.session_state or st.session_state.role is None:
+        st.switch_page("app.py")
+    menu()
+
+# Call the menu_with_redirect function
+menu_with_redirect()

@@ -1,28 +1,33 @@
 import streamlit as st
-import pages.gdrive
-import pages.sftp
-import pages.prompts
-import pages.enhanced
+
+
+def authenticated_menu():
+    # Show a navigation menu for authenticated users
+    st.sidebar.page_link("app.py", label="Home", icon="🏠")
+    st.sidebar.page_link("pages/gdrive.py", label="Upload via Gdrive", icon="🌍")
+    st.sidebar.page_link("pages/sftp.py", label="Upload via SFTP", icon="🚀")
+    st.sidebar.page_link("pages/prompts.py", label="Magic Prompts", icon="✨")
+    st.sidebar.page_link("pages/enhanced.py", label="Enhanced Images", icon="🖼️")
+    
+
+def unauthenticated_menu():
+    # Show a navigation menu for unauthenticated users
+    st.sidebar.page_link("app.py", label="Log in", icon="🔒")
+
 
 def menu():
-    # Create a sidebar for navigation
-    st.sidebar.title("Navigation")
-    
-    # Define a dictionary of page names and corresponding functions
-    pages = {
-        "Google Drive": pages.gdrive.show,
-        "SFTP": pages.sftp.show,
-        "Prompts": pages.prompts.show,
-        "Enhanced": pages.enhanced.show
-    }
-    
-    # Get user selection from the sidebar
-    selection = st.sidebar.radio("Go to", list(pages.keys()))
-    
-    # Call the function associated with the selected page
-    pages[selection]()
+    # Determine if a user is logged in or not, then show the correct
+    # navigation menu
+    if "role" not in st.session_state or st.session_state.role is None:
+        unauthenticated_menu()
+        return
+    authenticated_menu()
 
-    # Display additional menu information or links
-    st.sidebar.markdown("## Additional Links")
-    st.sidebar.markdown("[Streamlit Documentation](https://docs.streamlit.io)")
-    st.sidebar.markdown("[GitHub Repository](https://github.com)")
+
+def menu_with_redirect():
+    # Redirect users to the main page if not logged in, otherwise continue to
+    # render the navigation menu
+    if "role" not in st.session_state or st.session_state.role is None:
+        st.switch_page("app.py")
+    menu()
+

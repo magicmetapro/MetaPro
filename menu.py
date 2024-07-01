@@ -38,10 +38,10 @@ def menu():
     """, unsafe_allow_html=True)
 
     # Render buttons in the sidebar
-    if st.sidebar.button("Page 1", key="page1", help="Go to Page 1"):
+    if st.sidebar.button("Page 1", key="gdrive", help="Go to Page 1"):
         st.session_state.page = "Page 1"
     st.sidebar.markdown('<div class="spacing"></div>', unsafe_allow_html=True)  # Add space between buttons
-    if st.sidebar.button("Page 2", key="page2", help="Go to Page 2"):
+    if st.sidebar.button("Page 2", key="sftp", help="Go to Page 2"):
         st.session_state.page = "Page 2"
 
     # Display the selected page

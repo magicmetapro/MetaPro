@@ -1,6 +1,6 @@
 import streamlit as st
 
-def menu():
+def menu_with_redirect():
     # Implement your redirection logic here
     # For example, check if the user is logged in, if not, redirect to login page
     if 'logged_in' not in st.session_state:

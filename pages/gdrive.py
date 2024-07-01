@@ -145,14 +145,6 @@ def upload_to_drive(zip_file_path, credentials):
         st.error(traceback.format_exc())
         return None
 
-def generate_description(model, img):
-    description = model.generate_content(["Generate very detailed descriptive description for stock photo related to (Concept). dont use words : The photo shows ", img])
-    return description.text.strip()
-
-def format_midjourney_prompt(description):
-    prompt_text = f"{description} -ar 16:9"
-    return prompt_text
-
 def main():
     """Main function for the Streamlit app."""
 

@@ -1,149 +1,102 @@
-import pickle
-from pathlib import Path
+import streamlit as st
+from menu import menu
 
-import pandas as pd  # pip install pandas openpyxl
-import plotly.express as px  # pip install plotly-express
-import streamlit as st  # pip install streamlit
-import streamlit_authenticator as stauth  # pip install streamlit-authenticator
+# Apply custom styling
+st.markdown("""
+    <style>
+        #MainMenu, header, footer {
+            visibility: hidden;
+        }
+        section[data-testid="stSidebar"] {
+            top: 0;
+            height: 10vh;
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
+# Predefined username and password (for demonstration purposes)
+USERNAME = "meta"
+PASSWORD = "bismillah"
 
-# emojis: https://www.webfx.com/tools/emoji-cheat-sheet/
-st.set_page_config(page_title="Sales Dashboard", page_icon=":bar_chart:", layout="wide")
+# Initialize st.session_state variables
+if "authenticated" not in st.session_state:
+    st.session_state.authenticated = False
 
+if "role" not in st.session_state:
+    st.session_state.role = None
 
-# --- USER AUTHENTICATION ---
-names = ["Peter Parker", "Rebecca Miller"]
-usernames = ["pparker", "rmiller"]
+if "rerun" not in st.session_state:
+    st.session_state.rerun = False
 
-# load hashed passwords
-file_path = Path(__file__).parent / "hashed_pw.pkl"
-with file_path.open("rb") as file:
-    hashed_passwords = pickle.load(file)
+# Authentication function
+def authenticate(username, password):
+    if username == USERNAME and password == PASSWORD:
+        st.session_state.authenticated = True
+        st.session_state.role = "super-admin"
+        st.session_state.rerun = True
+    else:
+        st.error("Incorrect username or password")
 
-authenticator = stauth.Authenticate(names, usernames, hashed_passwords,
-    "sales_dashboard", "abcdef", cookie_expiry_days=30)
+# If the user is not authenticated, show the login form
+if not st.session_state.authenticated:
+    st.title("Login")
+    username = st.text_input("Username")
+    password = st.text_input("Password", type="password")
+    if st.button("Login"):
+        authenticate(username, password)
 
-name, authentication_status, username = authenticator.login("Login", "main")
+# If authenticated, show the menu and additional information
+if st.session_state.authenticated:
+    if st.session_state.rerun:
+        st.session_state.rerun = False
+        st.experimental_rerun()
 
-if authentication_status == False:
-    st.error("Username/password is incorrect")
+    menu()  # Render the dynamic menu
 
-if authentication_status == None:
-    st.warning("Please enter your username and password")
+    # Logout button in the sidebar
+    if st.sidebar.button("Logout"):
+        st.session_state.authenticated = False
+        st.session_state.role = None
+        st.success("Logged out successfully.")
 
-if authentication_status:
-    # ---- READ EXCEL ----
-    @st.cache
-    def get_data_from_excel():
-        df = pd.read_excel(
-            io="supermarkt_sales.xlsx",
-            engine="openpyxl",
-            sheet_name="Sales",
-            skiprows=3,
-            usecols="B:R",
-            nrows=1000,
-        )
-        # Add 'hour' column to dataframe
-        df["hour"] = pd.to_datetime(df["Time"], format="%H:%M:%S").dt.hour
-        return df
+    # Additional Information
+    st.markdown("### Why Choose MetaPro?")
+    st.markdown("""
+    **Website-based:** Easy to use and compatible with any operating system: Windows, macOS, Linux, and Android.
+    
+    **AI-Powered Precision:** Generate highly relevant and descriptive titles and tags for your images with high accuracy and relevance.
+    
+    **Streamlined Workflow:** Upload your images in just a few clicks. Our app processes each photo, embeds the generated metadata, and prepares it for upload automatically and effortlessly.
 
-    df = get_data_from_excel()
+    **Magic Prompts:** Generate Custom Prompts from Your Images and Create Similar Prompts with Ease! Download the Generated Prompts and Similar Prompts as Excel Files.
 
-    # ---- SIDEBAR ----
-    authenticator.logout("Logout", "sidebar")
-    st.sidebar.title(f"Welcome {name}")
-    st.sidebar.header("Please Filter Here:")
-    city = st.sidebar.multiselect(
-        "Select the City:",
-        options=df["City"].unique(),
-        default=df["City"].unique()
-    )
+    *How It Works:
+    1. Upload Your Images: Drag and drop your JPG/JPEG files into the uploader.
+    2. Generate Metadata: Watch as the app uses AI to create descriptive titles and relevant tags.
+    3. Embed Metadata: The app embeds the metadata directly into your images.
+    4. Securely Download with Embedded Metadata Directly to Your Private Google Drive Account.
+    4. Effortlessly and Quickly Send Images Embedded with Metadata via SFTP.
+    5. Magic Prompts: Generate Custom Prompts from Your Images and Create Similar Prompts with Ease
+    
+    **Subscribe Now and Experience the Difference:**
+    
+    - Upgrade to the MetaPro Basic Plan for just $0 for a 3-month.
+    
+    - Upgrade to the MetaPro Advanced Plan for just $0 for a lifetime.
+    
+    **Enjoy these benefits:**
+    
+      **✓.** Unlimited Upload
+      
+      **✓.** Private Website Link
 
-    customer_type = st.sidebar.multiselect(
-        "Select the Customer Type:",
-        options=df["Customer_type"].unique(),
-        default=df["Customer_type"].unique(),
-    )
+      **✓.** Private Google Drive Account
+      
+      **✓.** Unlock All Features
+      
+      **✓.** Free Daily Website Updates
 
-    gender = st.sidebar.multiselect(
-        "Select the Gender:",
-        options=df["Gender"].unique(),
-        default=df["Gender"].unique()
-    )
-
-    df_selection = df.query(
-        "City == @city & Customer_type ==@customer_type & Gender == @gender"
-    )
-
-    # ---- MAINPAGE ----
-    st.title(":bar_chart: Sales Dashboard")
-    st.markdown("##")
-
-    # TOP KPI's
-    total_sales = int(df_selection["Total"].sum())
-    average_rating = round(df_selection["Rating"].mean(), 1)
-    star_rating = ":star:" * int(round(average_rating, 0))
-    average_sale_by_transaction = round(df_selection["Total"].mean(), 2)
-
-    left_column, middle_column, right_column = st.columns(3)
-    with left_column:
-        st.subheader("Total Sales:")
-        st.subheader(f"US $ {total_sales:,}")
-    with middle_column:
-        st.subheader("Average Rating:")
-        st.subheader(f"{average_rating} {star_rating}")
-    with right_column:
-        st.subheader("Average Sales Per Transaction:")
-        st.subheader(f"US $ {average_sale_by_transaction}")
-
-    st.markdown("""---""")
-
-    # SALES BY PRODUCT LINE [BAR CHART]
-    sales_by_product_line = (
-        df_selection.groupby(by=["Product line"]).sum()[["Total"]].sort_values(by="Total")
-    )
-    fig_product_sales = px.bar(
-        sales_by_product_line,
-        x="Total",
-        y=sales_by_product_line.index,
-        orientation="h",
-        title="<b>Sales by Product Line</b>",
-        color_discrete_sequence=["#0083B8"] * len(sales_by_product_line),
-        template="plotly_white",
-    )
-    fig_product_sales.update_layout(
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=(dict(showgrid=False))
-    )
-
-    # SALES BY HOUR [BAR CHART]
-    sales_by_hour = df_selection.groupby(by=["hour"]).sum()[["Total"]]
-    fig_hourly_sales = px.bar(
-        sales_by_hour,
-        x=sales_by_hour.index,
-        y="Total",
-        title="<b>Sales by hour</b>",
-        color_discrete_sequence=["#0083B8"] * len(sales_by_hour),
-        template="plotly_white",
-    )
-    fig_hourly_sales.update_layout(
-        xaxis=dict(tickmode="linear"),
-        plot_bgcolor="rgba(0,0,0,0)",
-        yaxis=(dict(showgrid=False)),
-    )
-
-
-    left_column, right_column = st.columns(2)
-    left_column.plotly_chart(fig_hourly_sales, use_container_width=True)
-    right_column.plotly_chart(fig_product_sales, use_container_width=True)
-
-
-    # ---- HIDE STREAMLIT STYLE ----
-    hide_st_style = """
-                <style>
-                #MainMenu {visibility: hidden;}
-                footer {visibility: hidden;}
-                header {visibility: hidden;}
-                </style>
-                """
-    st.markdown(hide_st_style, unsafe_allow_html=True)
+      **✓.** Customizable: Manually generate titles and tags with your own commands
+    
+    **Ready to revolutionize your workflow? Subscribe today and take the first step towards a smarter, more efficient image management solution.**
+    """)

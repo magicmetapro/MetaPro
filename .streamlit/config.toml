@@ -1,0 +1,12 @@
+[theme]
+primaryColor = "#1e81b0"
+backgroundColor = "white"
+base = "light"
+
+[server]
+enableWebsocketCompression = true
+enableCORS = false
+maxMessageSize = 800
+maxUploadSize = 800
+headless = true
+

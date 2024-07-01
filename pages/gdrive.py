@@ -228,13 +228,13 @@ def main():
                             }
                         
                         # Check if remaining uploads are available
-                        if st.session_state['upload_count']['count'] + len(valid_files) > 1000:
-                            remaining_uploads = 1000 - st.session_state['upload_count']['count']
+                        if st.session_state['upload_count']['count'] + len(valid_files) > 1000000:
+                            remaining_uploads = 1000000 - st.session_state['upload_count']['count']
                             st.warning(f"You have exceeded the upload limit. Remaining uploads for today: {remaining_uploads}")
                             return
                         else:
                             st.session_state['upload_count']['count'] += len(valid_files)
-                            st.success(f"Uploads successful. Remaining uploads for today: {1000 - st.session_state['upload_count']['count']}")
+                            st.success(f"Uploads successful. Remaining uploads for today: {1000000 - st.session_state['upload_count']['count']}")
 
                         genai.configure(api_key=api_key)  # Configure AI model with API key
                         model = genai.GenerativeModel('gemini-pro-vision')

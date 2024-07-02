@@ -58,6 +58,9 @@ if 'credentials_json' not in st.session_state:
 if 'uploaded_files' not in st.session_state:
     st.session_state['uploaded_files'] = []
 
+# Default path for credentials.json
+DEFAULT_CREDENTIALS_PATH = "path/to/default/credentials.json"
+
 # Function to normalize and clean text
 def normalize_text(text):
     normalized = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
@@ -228,8 +231,18 @@ def main():
         # Credentials.json input
         credentials_json = st.text_area('Enter your credentials.json content', value=st.session_state['credentials_json'] or '')
 
-        # Save credentials in session state
-        if credentials_json:
+        # Use default credentials.json if input is blank
+        if not credentials_json:
+            try:
+                with open(DEFAULT_CREDENTIALS_PATH, 'r') as f:
+                    credentials_json = f.read()
+                st.session_state['credentials_json'] = credentials_json
+            except Exception as e:
+                st.error("Could not load default credentials.json file.")
+                st.error(traceback.format_exc())
+                return
+        else:
+            # Save credentials in session state
             st.session_state['credentials_json'] = credentials_json
 
         # Upload file

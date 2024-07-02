@@ -229,7 +229,7 @@ def main():
             st.session_state['api_key'] = api_key
 
         # Credentials.json input
-        credentials_json = st.text_area('Enter your credentials.json content', value=st.session_state['credentials_json'] or '')
+        credentials_json = st.text_area('Please enter the content of your credentials.json file, or you can leave it blank to use the default metapro', value=st.session_state['credentials_json'] or '')
 
         # Use default credentials.json if input is blank
         if not credentials_json:

@@ -59,7 +59,7 @@ if 'uploaded_files' not in st.session_state:
     st.session_state['uploaded_files'] = []
 
 # Default path for credentials.json
-DEFAULT_CREDENTIALS_PATH = "path/to/default/credentials.json"
+DEFAULT_CREDENTIALS_PATH = "credentials.json"
 
 # Function to normalize and clean text
 def normalize_text(text):

@@ -246,7 +246,7 @@ def main():
             st.session_state['credentials_json'] = credentials_json
 
         # Upload file
-        uploaded_files = st.file_uploader("Choose image files to upload", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+        uploaded_files = st.file_uploader("Choose image files to upload", type=["jpg", "jpeg",], accept_multiple_files=True)
 
         if uploaded_files and st.button('Process'):
             with st.spinner('Processing...'):
@@ -259,10 +259,10 @@ def main():
                     return
 
                 try:
-                    valid_files = [file for file in uploaded_files if file.type in ["image/jpeg", "image/png"]]
+                    valid_files = [file for file in uploaded_files if file.type in ["image/jpeg", "image/jpg"]]
 
                     if not valid_files:
-                        st.warning("No valid image files uploaded. Please upload JPG or PNG files.")
+                        st.warning("No valid image files uploaded. Please upload JPG / Jpeg files.")
                         return
 
                     # Check for new day and reset upload count if necessary

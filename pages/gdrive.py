@@ -112,7 +112,7 @@ def embed_metadata(image_path, metadata, progress_bar, files_processed, total_fi
         st.error(traceback.format_exc())  # Print detailed error traceback for debugging
 
 def zip_processed_images(image_paths):
-    try:
+    try {
         zip_file_path = os.path.join(tempfile.gettempdir(), 'processed_images.zip')
 
         with zipfile.ZipFile(zip_file_path, 'w') as zipf:
@@ -271,6 +271,7 @@ def main():
                                     img = Image.open(image_path)
                                     metadata = generate_metadata(model, img)
                                     metadata_list.append(metadata)
+                                    time.sleep(3)  # Added delay of 3 seconds
                                 except Exception as e:
                                     st.error(f"An error occurred while generating metadata for {os.path.basename(image_path)}: {e}")
                                     st.error(traceback.format_exc())

@@ -15,7 +15,6 @@ import json
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-from googleapiclient.errors import HttpError
 from menu import menu_with_redirect
 
 st.set_option("client.showSidebarNavigation", False)
@@ -51,6 +50,9 @@ if 'upload_count' not in st.session_state:
 
 if 'api_key' not in st.session_state:
     st.session_state['api_key'] = None
+
+if 'uploaded_file_id' not in st.session_state:
+    st.session_state['uploaded_file_id'] = None
 
 # Function to normalize and clean text
 def normalize_text(text):
@@ -140,30 +142,21 @@ def upload_to_drive(zip_file_path, credentials):
             body={'type': 'anyone', 'role': 'reader'}
         ).execute()
 
+        st.session_state['uploaded_file_id'] = file.get('id')
         return file.get('webViewLink')
     except Exception as e:
         st.error(f"An error occurred while uploading to Google Drive: {e}")
         st.error(traceback.format_exc())
         return None
 
-def list_drive_files(credentials):
-    try:
-        service = build('drive', 'v3', credentials=credentials)
-        results = service.files().list(
-            pageSize=10, fields="files(id, name, webViewLink)").execute()
-        items = results.get('files', [])
-        return items
-    except HttpError as error:
-        st.error(f"An error occurred: {error}")
-        return None
-
-def delete_drive_file(file_id, credentials):
+def delete_from_drive(file_id, credentials):
     try:
         service = build('drive', 'v3', credentials=credentials)
         service.files().delete(fileId=file_id).execute()
-        st.success(f"File {file_id} deleted successfully.")
-    except HttpError as error:
-        st.error(f"An error occurred: {error}")
+        st.success("File deleted from Google Drive successfully!")
+    except Exception as e:
+        st.error(f"An error occurred while deleting the file from Google Drive: {e}")
+        st.error(traceback.format_exc())
 
 def main():
     """Main function for the Streamlit app."""
@@ -320,15 +313,15 @@ def main():
                         st.error(f"An error occurred: {e}")
                         st.error(traceback.format_exc())  # Print detailed error traceback for debugging
 
-        # Button to list files in Google Drive
-        if st.button("List Files in Google Drive"):
-            credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/drive.file'])
-            files = list_drive_files(credentials)
-            if files:
-                for file in files:
-                    st.write(f"Name: {file['name']} - [View]({file['webViewLink']})")
-                    if st.button(f"Delete {file['name']}", key=file['id']):
-                        delete_drive_file(file['id'], credentials)
+    if st.session_state['uploaded_file_id']:
+        if st.button("Delete Uploaded File from Google Drive"):
+            with st.spinner("Deleting file..."):
+                try:
+                    credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/drive.file'])
+                    delete_from_drive(st.session_state['uploaded_file_id'], credentials)
+                    st.session_state['uploaded_file_id'] = None
+                except Exception as e:
+                    st.error(f"An error occurred while deleting the file: {e}")
 
 if __name__ == '__main__':
     main()

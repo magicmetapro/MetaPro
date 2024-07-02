@@ -338,7 +338,7 @@ def main():
 
                             if drive_link:
                                 st.success("File uploaded to Google Drive successfully!")
-                                # st.markdown(f"[Download processed images from Google Drive]({drive_link})")
+                                st.markdown(f"[Download processed images from Google Drive]({drive_link})")
 
                                 # Save uploaded file details in session state
                                 st.session_state['uploaded_files'].append({

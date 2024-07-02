@@ -112,7 +112,7 @@ def embed_metadata(image_path, metadata, progress_bar, files_processed, total_fi
         st.error(traceback.format_exc())  # Print detailed error traceback for debugging
 
 def zip_processed_images(image_paths):
-    try {
+    try:
         zip_file_path = os.path.join(tempfile.gettempdir(), 'processed_images.zip')
 
         with zipfile.ZipFile(zip_file_path, 'w') as zipf:
@@ -125,6 +125,7 @@ def zip_processed_images(image_paths):
         st.error(f"An error occurred while zipping images: {e}")
         st.error(traceback.format_exc())
         return None
+
 
 def upload_to_drive(zip_file_path, credentials):
     try:

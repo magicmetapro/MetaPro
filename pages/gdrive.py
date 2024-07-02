@@ -69,20 +69,21 @@ def normalize_text(text):
 
 # Function to generate metadata for images using AI model
 def generate_metadata(model, img):
-    caption = model.generate_content(["Create a descriptive title in English up to 12 words long, highlighting the main elements of the image. Identify primary subjects, objects, activities, and context. Include relevant SEO keywords to ensure the title is engaging and informative. Avoid mentioning human names, brand names, product names, or company names.", img])
-    tags = model.generate_content(["Create up to 45 keywords in English that are relevant to the image (each keyword must be one word, separated by commas). Ensure each keyword is a single word, separated by commas.", img])
+    caption_response = model.generate_text(prompt="Create a descriptive title in English up to 12 words long, highlighting the main elements of the image. Identify primary subjects, objects, activities, and context. Include relevant SEO keywords to ensure the title is engaging and informative. Avoid mentioning human names, brand names, product names, or company names.", context=img)
+    tags_response = model.generate_text(prompt="Create up to 45 keywords in English that are relevant to the image (each keyword must be one word, separated by commas). Ensure each keyword is a single word, separated by commas.", context=img)
 
     # Filter out undesirable characters from the generated tags
-    filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
+    filtered_tags = re.sub(r'[^\w\s,]', '', tags_response.result)
     
     # Trim the generated keywords if they exceed 49 words
     keywords = filtered_tags.split(',')[:49]  # Limit to 49 words
     trimmed_tags = ','.join(keywords)
     
     return {
-        'Title': caption.text.strip(),  # Remove leading/trailing whitespace
+        'Title': caption_response.result.strip(),  # Remove leading/trailing whitespace
         'Tags': trimmed_tags.strip()
     }
+
 
 # Function to embed metadata into images
 def embed_metadata(image_path, metadata, progress_bar, files_processed, total_files):
@@ -255,63 +256,66 @@ def main():
         # Select upload destination
         upload_destination = st.selectbox("Select upload destination", ["Google Drive", "Dropbox"])
 
-        # Process and upload images
+        # Add the process button
         if uploaded_files and api_key:
-            current_date_str = current_date.strftime('%Y-%m-%d')
+            process_button = st.button("Process Images")
+            
+            if process_button:
+                current_date_str = current_date.strftime('%Y-%m-%d')
 
-            if st.session_state['upload_count']['date'] != current_date_str:
-                st.session_state['upload_count'] = {
-                    'date': current_date_str,
-                    'count': 0
-                }
+                if st.session_state['upload_count']['date'] != current_date_str:
+                    st.session_state['upload_count'] = {
+                        'date': current_date_str,
+                        'count': 0
+                    }
 
-            total_files = len(uploaded_files)
-            if st.session_state['upload_count']['count'] + total_files > 100:
-                st.error("Upload limit exceeded. You can upload up to 100 images per day.")
-            else:
-                progress_bar = st.progress(0)
-                files_processed = 0
+                total_files = len(uploaded_files)
+                if st.session_state['upload_count']['count'] + total_files > 100:
+                    st.error("Upload limit exceeded. You can upload up to 100 images per day.")
+                else:
+                    progress_bar = st.progress(0)
+                    files_processed = 0
 
-                try:
-                    temp_dir = tempfile.mkdtemp()
+                    try:
+                        temp_dir = tempfile.mkdtemp()
 
-                    # Process and save images with metadata
-                    processed_image_paths = []
-                    for uploaded_file in uploaded_files:
-                        temp_image_path = os.path.join(temp_dir, uploaded_file.name)
-                        with open(temp_image_path, "wb") as f:
-                            f.write(uploaded_file.read())
+                        # Process and save images with metadata
+                        processed_image_paths = []
+                        for uploaded_file in uploaded_files:
+                            temp_image_path = os.path.join(temp_dir, uploaded_file.name)
+                            with open(temp_image_path, "wb") as f:
+                                f.write(uploaded_file.read())
 
-                        metadata = generate_metadata(genai, temp_image_path)
-                        updated_image_path = embed_metadata(temp_image_path, metadata, progress_bar, files_processed, total_files)
-                        processed_image_paths.append(updated_image_path)
-                        files_processed += 1
+                            metadata = generate_metadata(genai, temp_image_path)
+                            updated_image_path = embed_metadata(temp_image_path, metadata, progress_bar, files_processed, total_files)
+                            processed_image_paths.append(updated_image_path)
+                            files_processed += 1
 
-                    # Zip the processed images
-                    zip_file_path = zip_processed_images(processed_image_paths)
+                        # Zip the processed images
+                        zip_file_path = zip_processed_images(processed_image_paths)
 
-                    # Upload to the selected destination
-                    if upload_destination == "Google Drive":
-                        credentials_json = st.text_area('Google Drive Service Account Credentials', height=200)
-                        if credentials_json:
-                            credentials = service_account.Credentials.from_service_account_info(json.loads(credentials_json), scopes=["https://www.googleapis.com/auth/drive.file"])
-                            file_id, webview_link = upload_to_drive(zip_file_path, credentials)
-                            if file_id and webview_link:
-                                st.session_state['uploaded_files'].append({
-                                    'file_id': file_id,
-                                    'webview_link': webview_link
-                                })
-                                st.success(f"Upload to Google Drive successful. [View File]({webview_link})")
+                        # Upload to the selected destination
+                        if upload_destination == "Google Drive":
+                            credentials_json = st.text_area('Google Drive Service Account Credentials', height=200)
+                            if credentials_json:
+                                credentials = service_account.Credentials.from_service_account_info(json.loads(credentials_json), scopes=["https://www.googleapis.com/auth/drive.file"])
+                                file_id, webview_link = upload_to_drive(zip_file_path, credentials)
+                                if file_id and webview_link:
+                                    st.session_state['uploaded_files'].append({
+                                        'file_id': file_id,
+                                        'webview_link': webview_link
+                                    })
+                                    st.success(f"Upload to Google Drive successful. [View File]({webview_link})")
+                                    st.session_state['upload_count']['count'] += total_files
+                        elif upload_destination == "Dropbox" and dropbox_token:
+                            shared_link = upload_to_dropbox(zip_file_path, dropbox_token)
+                            if shared_link:
+                                st.success(f"Upload to Dropbox successful. [View File]({shared_link})")
                                 st.session_state['upload_count']['count'] += total_files
-                    elif upload_destination == "Dropbox" and dropbox_token:
-                        shared_link = upload_to_dropbox(zip_file_path, dropbox_token)
-                        if shared_link:
-                            st.success(f"Upload to Dropbox successful. [View File]({shared_link})")
-                            st.session_state['upload_count']['count'] += total_files
 
-                except Exception as e:
-                    st.error(f"An error occurred during processing: {e}")
-                    st.error(traceback.format_exc())
+                    except Exception as e:
+                        st.error(f"An error occurred during processing: {e}")
+                        st.error(traceback.format_exc())
 
 if __name__ == "__main__":
     main()

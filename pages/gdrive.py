@@ -16,6 +16,7 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from googleapiclient.errors import HttpError
+import dropbox
 from menu import menu_with_redirect
 
 st.set_option("client.showSidebarNavigation", False)
@@ -54,6 +55,9 @@ if 'api_key' not in st.session_state:
 
 if 'credentials_json' not in st.session_state:
     st.session_state['credentials_json'] = None
+
+if 'dropbox_token' not in st.session_state:
+    st.session_state['dropbox_token'] = None
 
 if 'uploaded_files' not in st.session_state:
     st.session_state['uploaded_files'] = []
@@ -152,6 +156,18 @@ def upload_to_drive(zip_file_path, credentials):
         st.error(traceback.format_exc())
         return None, None
 
+def upload_to_dropbox(zip_file_path, dropbox_token):
+    try:
+        dbx = dropbox.Dropbox(dropbox_token)
+        with open(zip_file_path, 'rb') as f:
+            dbx.files_upload(f.read(), '/' + os.path.basename(zip_file_path), mute=True)
+        shared_link_metadata = dbx.sharing_create_shared_link_with_settings('/' + os.path.basename(zip_file_path))
+        return shared_link_metadata.url
+    except Exception as e:
+        st.error(f"An error occurred while uploading to Dropbox: {e}")
+        st.error(traceback.format_exc())
+        return None
+
 def delete_file_from_drive(file_id, credentials):
     try:
         service = build('drive', 'v3', credentials=credentials)
@@ -232,13 +248,23 @@ def main():
         if credentials_json:
             st.session_state['credentials_json'] = credentials_json
 
+        # Dropbox token input
+        dropbox_token = st.text_input('Enter your Dropbox token', value=st.session_state['dropbox_token'] or '')
+
+        # Save Dropbox token in session state
+        if dropbox_token:
+            st.session_state['dropbox_token'] = dropbox_token
+
+        # Upload destination dropdown
+        upload_destination = st.selectbox('Select upload destination', ['Google Drive', 'Dropbox'])
+
         # Upload file
         uploaded_files = st.file_uploader("Choose image files to upload", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
         if uploaded_files and st.button('Process'):
             with st.spinner('Processing...'):
-                if not api_key or not credentials_json:
-                    st.error("Please enter both the API Key and the credentials.json content.")
+                if not api_key or (upload_destination == 'Google Drive' and not credentials_json) or (upload_destination == 'Dropbox' and not dropbox_token):
+                    st.error("Please enter the required credentials for the selected upload destination.")
                     return
 
                 if len(uploaded_files) > 45:
@@ -318,28 +344,35 @@ def main():
                         zip_file_path = zip_processed_images(processed_image_paths)
 
                         if zip_file_path:
-                            # Upload zip file to Google Drive and get the shareable link
-                            credentials = service_account.Credentials.from_service_account_info(json.loads(credentials_json), scopes=['https://www.googleapis.com/auth/drive.file'])
-                            file_id, drive_link = upload_to_drive(zip_file_path, credentials)
-                            st.session_state['uploaded_file_id'] = file_id
+                            if upload_destination == 'Google Drive':
+                                # Upload zip file to Google Drive and get the shareable link
+                                credentials = service_account.Credentials.from_service_account_info(json.loads(credentials_json), scopes=['https://www.googleapis.com/auth/drive.file'])
+                                file_id, drive_link = upload_to_drive(zip_file_path, credentials)
+                                st.session_state['uploaded_file_id'] = file_id
 
-                            if drive_link:
-                                st.success("File uploaded to Google Drive successfully!")
-                                st.markdown(f"[Download processed images from Google Drive]({drive_link})")
+                                if drive_link:
+                                    st.success("File uploaded to Google Drive successfully!")
+                                    st.markdown(f"[Download processed images from Google Drive]({drive_link})")
 
-                                # Save uploaded file details in session state
-                                st.session_state['uploaded_files'].append({
-                                    'file_id': file_id,
-                                    'file_name': os.path.basename(zip_file_path),
-                                    'drive_link': drive_link
-                                })
+                                    # Save uploaded file details in session state
+                                    st.session_state['uploaded_files'].append({
+                                        'file_id': file_id,
+                                        'file_name': os.path.basename(zip_file_path),
+                                        'drive_link': drive_link
+                                    })
+                            elif upload_destination == 'Dropbox':
+                                # Upload zip file to Dropbox and get the shareable link
+                                dropbox_link = upload_to_dropbox(zip_file_path, dropbox_token)
+                                if dropbox_link:
+                                    st.success("File uploaded to Dropbox successfully!")
+                                    st.markdown(f"[Download processed images from Dropbox]({dropbox_link})")
 
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
                     st.error(traceback.format_exc())  # Print detailed error traceback for debugging
 
-        # Display uploaded files and add a delete button for each file
-        if st.session_state['uploaded_files']:
+        # Display uploaded files and add a delete button for each file (Google Drive only)
+        if st.session_state['uploaded_files'] and upload_destination == 'Google Drive':
             st.header("Uploaded Files")
             for uploaded_file in st.session_state['uploaded_files']:
                 file_name = uploaded_file['file_name']

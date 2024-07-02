@@ -52,15 +52,6 @@ if 'upload_count' not in st.session_state:
 if 'api_key' not in st.session_state:
     st.session_state['api_key'] = None
 
-if 'credentials_json' not in st.session_state:
-    st.session_state['credentials_json'] = None
-
-if 'uploaded_files' not in st.session_state:
-    st.session_state['uploaded_files'] = []
-
-# Default path for credentials.json
-DEFAULT_CREDENTIALS_PATH = "credentials.json"
-
 # Function to normalize and clean text
 def normalize_text(text):
     normalized = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
@@ -149,22 +140,30 @@ def upload_to_drive(zip_file_path, credentials):
             body={'type': 'anyone', 'role': 'reader'}
         ).execute()
 
-        return file.get('id'), file.get('webViewLink')
+        return file.get('webViewLink')
     except Exception as e:
         st.error(f"An error occurred while uploading to Google Drive: {e}")
         st.error(traceback.format_exc())
-        return None, None
+        return None
 
-def delete_file_from_drive(file_id, credentials):
+def list_drive_files(credentials):
+    try:
+        service = build('drive', 'v3', credentials=credentials)
+        results = service.files().list(
+            pageSize=10, fields="files(id, name, webViewLink)").execute()
+        items = results.get('files', [])
+        return items
+    except HttpError as error:
+        st.error(f"An error occurred: {error}")
+        return None
+
+def delete_drive_file(file_id, credentials):
     try:
         service = build('drive', 'v3', credentials=credentials)
         service.files().delete(fileId=file_id).execute()
-        st.success("File deleted successfully from Google Drive.")
+        st.success(f"File {file_id} deleted successfully.")
     except HttpError as error:
-        st.error(f"An error occurred while deleting the file: {error}")
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
-        st.error(traceback.format_exc())
+        st.error(f"An error occurred: {error}")
 
 def main():
     """Main function for the Streamlit app."""
@@ -228,143 +227,108 @@ def main():
         if api_key:
             st.session_state['api_key'] = api_key
 
-        # Credentials.json input
-        credentials_json = st.text_area('Please enter the content of your credentials.json, or you can leave it blank to use the default metapro', value=st.session_state['credentials_json'] or '')
+        # Upload image files
+        uploaded_files = st.file_uploader('Upload Images (Only JPG and JPEG Supported)', accept_multiple_files=True)
 
-        # Use default credentials.json if input is blank
-        if not credentials_json:
-            try:
-                with open(DEFAULT_CREDENTIALS_PATH, 'r') as f:
-                    credentials_json = f.read()
-                st.session_state['credentials_json'] = credentials_json
-            except Exception as e:
-                st.error("Could not load default credentials.json file.")
-                st.error(traceback.format_exc())
-                return
-        else:
-            # Save credentials in session state
-            st.session_state['credentials_json'] = credentials_json
+        if uploaded_files:
+            valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', 'image/jpg']]
+            invalid_files = [file for file in uploaded_files if file not in valid_files]
 
-        # Upload file
-        uploaded_files = st.file_uploader("Choose image files to upload", type=["jpg", "jpeg",], accept_multiple_files=True)
+            if invalid_files:
+                st.error("Only JPG and JPEG files are supported.")
 
-        if uploaded_files and st.button('Process'):
-            with st.spinner('Processing...'):
-                if not api_key or not credentials_json:
-                    st.error("Please enter both the API Key and the credentials.json content.")
-                    return
+            if valid_files and st.button("Process"):
+                with st.spinner("Processing..."):
+                    try:
+                        # Check and update upload count for the current date
+                        if st.session_state['upload_count']['date'] != current_date.date():
+                            st.session_state['upload_count'] = {
+                                'date': current_date.date(),
+                                'count': 0
+                            }
+                        
+                        # Check if remaining uploads are available
+                        if st.session_state['upload_count']['count'] + len(valid_files) > 1000000:
+                            remaining_uploads = 1000000 - st.session_state['upload_count']['count']
+                            st.warning(f"You have exceeded the upload limit. Remaining uploads for today: {remaining_uploads}")
+                            return
+                        else:
+                            st.session_state['upload_count']['count'] += len(valid_files)
+                            st.success(f"Uploads successful. Remaining uploads for today: {1000000 - st.session_state['upload_count']['count']}")
 
-                if len(uploaded_files) > 45:
-                    st.error("You can upload a maximum of 45 files per session.")
-                    return
+                        genai.configure(api_key=api_key)  # Configure AI model with API key
+                        model = genai.GenerativeModel('gemini-pro-vision')
 
-                try:
-                    valid_files = [file for file in uploaded_files if file.type in ["image/jpeg", "image/jpg"]]
+                        # Create a temporary directory to store the uploaded images
+                        with tempfile.TemporaryDirectory() as temp_dir:
+                            # Save the uploaded images to the temporary directory
+                            image_paths = []
+                            for file in valid_files:
+                                temp_image_path = os.path.join(temp_dir, file.name)
+                                with open(temp_image_path, 'wb') as f:
+                                    f.write(file.read())
+                                image_paths.append(temp_image_path)
 
-                    if not valid_files:
-                        st.warning("No valid image files uploaded. Please upload JPG / Jpeg files.")
-                        return
+                            # Process each image and generate titles and tags using AI
+                            metadata_list = []
+                            process_placeholder = st.empty()
+                            for i, image_path in enumerate(image_paths):
+                                process_placeholder.text(f"Processing Generate Titles and Tags {i + 1}/{len(image_paths)}")
+                                try:
+                                    img = Image.open(image_path)
+                                    metadata = generate_metadata(model, img)
+                                    metadata_list.append(metadata)
+                                except Exception as e:
+                                    st.error(f"An error occurred while generating metadata for {os.path.basename(image_path)}: {e}")
+                                    st.error(traceback.format_exc())
+                                    continue
 
-                    # Check for new day and reset upload count if necessary
-                    if st.session_state['upload_count']['date'] != current_date.date():
-                        st.session_state['upload_count'] = {
-                            'date': current_date.date(),
-                            'count': 0
-                        }
-                    
-                    # Check if remaining uploads are available
-                    if st.session_state['upload_count']['count'] + len(valid_files) > 1000000:
-                        remaining_uploads = 1000000 - st.session_state['upload_count']['count']
-                        st.warning(f"You have exceeded the upload limit. Remaining uploads for today: {remaining_uploads}")
-                        return
-                    else:
-                        st.session_state['upload_count']['count'] += len(valid_files)
-                        st.success(f"Uploads successful. Remaining uploads for today: {1000000 - st.session_state['upload_count']['count']}")
+                            # Embed metadata into images
+                            total_files = len(image_paths)
+                            files_processed = 0
 
-                    genai.configure(api_key=api_key)  # Configure AI model with API key
-                    model = genai.GenerativeModel('gemini-pro-vision')
+                            # Display the progress bar and current file number
+                            progress_placeholder = st.empty()
+                            progress_bar = progress_placeholder.progress(0)
+                            progress_placeholder.text(f"Processing images 0/{total_files}")
 
-                    # Create a temporary directory to store the uploaded images
-                    with tempfile.TemporaryDirectory() as temp_dir:
-                        # Save the uploaded images to the temporary directory
-                        image_paths = []
-                        for file in valid_files:
-                            temp_image_path = os.path.join(temp_dir, file.name)
-                            with open(temp_image_path, 'wb') as f:
-                                f.write(file.read())
-                            image_paths.append(temp_image_path)
+                            processed_image_paths = []
+                            for i, (image_path, metadata) in enumerate(zip(image_paths, metadata_list)):
+                                process_placeholder.text(f"Embedding metadata for image {i + 1}/{len(image_paths)}")
+                                updated_image_path = embed_metadata(image_path, metadata, progress_bar, files_processed, total_files)
+                                if updated_image_path:
+                                    processed_image_paths.append(updated_image_path)
+                                    files_processed += 1
+                                    # Update progress bar and current file number
+                                    progress_bar.progress(files_processed / total_files)
 
-                        # Process each image and generate titles and tags using AI
-                        metadata_list = []
-                        process_placeholder = st.empty()
-                        for i, image_path in enumerate(image_paths):
-                            process_placeholder.text(f"Processing Generate Titles and Tags {i + 1}/{len(image_paths)}")
-                            try:
-                                img = Image.open(image_path)
-                                metadata = generate_metadata(model, img)
-                                metadata_list.append(metadata)
-                            except Exception as e:
-                                st.error(f"An error occurred while generating metadata for {os.path.basename(image_path)}: {e}")
-                                st.error(traceback.format_exc())
-                                continue
+                            # Zip processed images
+                            zip_file_path = zip_processed_images(processed_image_paths)
 
-                        # Embed metadata into images
-                        total_files = len(image_paths)
-                        files_processed = 0
+                            if zip_file_path:
+                               # st.success(f"Successfully zipped processed {zip_file_path}")
 
-                        # Display the progress bar and current file number
-                        progress_placeholder = st.empty()
-                        progress_bar = progress_placeholder.progress(0)
-                        progress_placeholder.text(f"Processing images 0/{total_files}")
+                                # Upload zip file to Google Drive and get the shareable link
+                                credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/drive.file'])
+                                drive_link = upload_to_drive(zip_file_path, credentials)
 
-                        processed_image_paths = []
-                        for i, (image_path, metadata) in enumerate(zip(image_paths, metadata_list)):
-                            process_placeholder.text(f"Embedding metadata for image {i + 1}/{len(image_paths)}")
-                            updated_image_path = embed_metadata(image_path, metadata, progress_bar, files_processed, total_files)
-                            if updated_image_path:
-                                processed_image_paths.append(updated_image_path)
-                                files_processed += 1
-                                # Update progress bar and current file number
-                                progress_bar.progress(files_processed / total_files)
+                                if drive_link:
+                                    st.success("File uploaded to Google Drive successfully!")
+                                    st.markdown(f"[Download processed images from Google Drive]({drive_link})")
 
-                        # Zip processed images
-                        zip_file_path = zip_processed_images(processed_image_paths)
+                    except Exception as e:
+                        st.error(f"An error occurred: {e}")
+                        st.error(traceback.format_exc())  # Print detailed error traceback for debugging
 
-                        if zip_file_path:
-                            # Upload zip file to Google Drive and get the shareable link
-                            credentials = service_account.Credentials.from_service_account_info(json.loads(credentials_json), scopes=['https://www.googleapis.com/auth/drive.file'])
-                            file_id, drive_link = upload_to_drive(zip_file_path, credentials)
-                            st.session_state['uploaded_file_id'] = file_id
-
-                            if drive_link:
-                                st.success("File uploaded to Google Drive successfully!")
-                                st.markdown(f"[Download processed images from Google Drive]({drive_link})")
-
-                                # Save uploaded file details in session state
-                                st.session_state['uploaded_files'].append({
-                                    'file_id': file_id,
-                                    'file_name': os.path.basename(zip_file_path),
-                                    'drive_link': drive_link
-                                })
-
-                except Exception as e:
-                    st.error(f"An error occurred: {e}")
-                    st.error(traceback.format_exc())  # Print detailed error traceback for debugging
-
-        # Display uploaded files and add a delete button for each file
-        if st.session_state['uploaded_files']:
-            st.header("Uploaded Files")
-            for uploaded_file in st.session_state['uploaded_files']:
-                file_name = uploaded_file['file_name']
-                file_id = uploaded_file['file_id']
-                drive_link = uploaded_file['drive_link']
-                
-                st.markdown(f"[{file_name}]({drive_link})")
-
-                if st.button(f'Delete {file_name}', key=file_id):
-                    with st.spinner('Deleting...'):
-                        delete_file_from_drive(file_id, service_account.Credentials.from_service_account_info(json.loads(credentials_json), scopes=['https://www.googleapis.com/auth/drive.file']))
-                        st.session_state['uploaded_files'] = [file for file in st.session_state['uploaded_files'] if file['file_id'] != file_id]
+        # Button to list files in Google Drive
+        if st.button("List Files in Google Drive"):
+            credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/drive.file'])
+            files = list_drive_files(credentials)
+            if files:
+                for file in files:
+                    st.write(f"Name: {file['name']} - [View]({file['webViewLink']})")
+                    if st.button(f"Delete {file['name']}", key=file['id']):
+                        delete_drive_file(file['id'], credentials)
 
 if __name__ == '__main__':
     main()

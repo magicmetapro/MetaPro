@@ -15,8 +15,8 @@ import json
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+from googleapiclient.errors import HttpError
 from menu import menu_with_redirect
-import google.api_core.exceptions
 
 st.set_option("client.showSidebarNavigation", False)
 
@@ -52,59 +52,36 @@ if 'upload_count' not in st.session_state:
 if 'api_key' not in st.session_state:
     st.session_state['api_key'] = None
 
-if 'uploaded_file_id' not in st.session_state:
-    st.session_state['uploaded_file_id'] = None
+if 'credentials_json' not in st.session_state:
+    st.session_state['credentials_json'] = None
+
+if 'uploaded_files' not in st.session_state:
+    st.session_state['uploaded_files'] = []
+
+# Default path for credentials.json
+DEFAULT_CREDENTIALS_PATH = "credentials.json"
 
 # Function to normalize and clean text
 def normalize_text(text):
     normalized = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
     return normalized
 
-# Function to generate metadata for images using AI model with retries
-def generate_metadata(model, img, max_retries=5, initial_delay=1):
-    for attempt in range(max_retries):
-        try:
-            prompt_caption = [
-                {
-                    "role": "user",
-                    "content": "Create a descriptive title in English up to 12 words long, highlighting the main elements of the image. Identify primary subjects, objects, activities, and context. Include relevant SEO keywords to ensure the title is engaging and informative. Avoid mentioning human names, brand names, product names, or company names."
-                }
-            ]
-            prompt_tags = [
-                {
-                    "role": "user",
-                    "content": "Create up to 45 keywords in English that are relevant to the image (each keyword must be one word, separated by commas). Ensure each keyword is a single word, separated by commas."
-                }
-            ]
+# Function to generate metadata for images using AI model
+def generate_metadata(model, img):
+    caption = model.generate_content(["Create a descriptive title in English up to 12 words long, highlighting the main elements of the image. Identify primary subjects, objects, activities, and context. Include relevant SEO keywords to ensure the title is engaging and informative. Avoid mentioning human names, brand names, product names, or company names.", img])
+    tags = model.generate_content(["Create up to 45 keywords in English that are relevant to the image (each keyword must be one word, separated by commas). Ensure each keyword is a single word, separated by commas.", img])
 
-            # Generating the caption and tags
-            caption_response = model.generate_text(prompt_caption)
-            tags_response = model.generate_text(prompt_tags)
-
-            caption = caption_response.result
-            tags = tags_response.result
-
-            # Filter out undesirable characters from the generated tags
-            filtered_tags = re.sub(r'[^\w\s,]', '', tags)
-
-            # Trim the generated keywords if they exceed 49 words
-            keywords = filtered_tags.split(',')[:49]  # Limit to 49 words
-            trimmed_tags = ','.join(keywords)
-
-            return {
-                'Title': caption.strip(),  # Remove leading/trailing whitespace
-                'Tags': trimmed_tags.strip()
-            }
-        except google.api_core.exceptions.InternalServerError as e:
-            st.error(f"An internal server error occurred: {e}. Retrying...")
-            time.sleep(initial_delay * (2 ** attempt))  # Exponential backoff
-        except Exception as e:
-            st.error(f"An error occurred while generating metadata: {e}")
-            st.error(traceback.format_exc())
-            break
-    else:
-        st.error("Failed to generate metadata after multiple attempts.")
-        return None
+    # Filter out undesirable characters from the generated tags
+    filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
+    
+    # Trim the generated keywords if they exceed 49 words
+    keywords = filtered_tags.split(',')[:49]  # Limit to 49 words
+    trimmed_tags = ','.join(keywords)
+    
+    return {
+        'Title': caption.text.strip(),  # Remove leading/trailing whitespace
+        'Tags': trimmed_tags.strip()
+    }
 
 # Function to embed metadata into images
 def embed_metadata(image_path, metadata, progress_bar, files_processed, total_files):
@@ -172,20 +149,21 @@ def upload_to_drive(zip_file_path, credentials):
             body={'type': 'anyone', 'role': 'reader'}
         ).execute()
 
-        st.session_state['uploaded_file_id'] = file.get('id')
-        return file.get('webViewLink')
+        return file.get('id'), file.get('webViewLink')
     except Exception as e:
         st.error(f"An error occurred while uploading to Google Drive: {e}")
         st.error(traceback.format_exc())
-        return None
+        return None, None
 
-def delete_from_drive(file_id, credentials):
+def delete_file_from_drive(file_id, credentials):
     try:
         service = build('drive', 'v3', credentials=credentials)
         service.files().delete(fileId=file_id).execute()
-        st.success("File deleted from Google Drive successfully!")
+        st.success("File deleted successfully from Google Drive.")
+    except HttpError as error:
+        st.error(f"An error occurred while deleting the file: {error}")
     except Exception as e:
-        st.error(f"An error occurred while deleting the file from Google Drive: {e}")
+        st.error(f"An error occurred: {e}")
         st.error(traceback.format_exc())
 
 def main():
@@ -243,102 +221,150 @@ def main():
             days_remaining = (expiration_date - current_date).days
             st.success(f"License valid. You have {days_remaining} days remaining. Max 45 files per upload, unlimited daily uploads.")
 
-        # Input API key
-        api_key = st.text_input("Enter your API Key", type="password")
-        st.session_state['api_key'] = api_key
+        # API Key input
+        api_key = st.text_input('Enter your [API](https://makersuite.google.com/app/apikey) Key', value=st.session_state['api_key'] or '')
 
+        # Save API key in session state
         if api_key:
-            # Upload images
-            uploaded_files = st.file_uploader("Upload Images (Only JPG and JPEG Supported)", type=["jpg", "jpeg"], accept_multiple_files=True)
+            st.session_state['api_key'] = api_key
 
-            if uploaded_files:
-                valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', 'image/jpg']]
+        # Credentials.json input
+        credentials_json = st.text_area('Please enter the content of your credentials.json, or you can leave it blank to use the default metapro', value=st.session_state['credentials_json'] or '')
 
-                if len(valid_files) > 45:
-                    st.error("Maximum of 45 files can be uploaded at once. Please upload up to 45 files.")
+        # Use default credentials.json if input is blank
+        if not credentials_json:
+            try:
+                with open(DEFAULT_CREDENTIALS_PATH, 'r') as f:
+                    credentials_json = f.read()
+                st.session_state['credentials_json'] = credentials_json
+            except Exception as e:
+                st.error("Could not load default credentials.json file.")
+                st.error(traceback.format_exc())
+                return
+        else:
+            # Save credentials in session state
+            st.session_state['credentials_json'] = credentials_json
+
+        # Upload file
+        uploaded_files = st.file_uploader("Choose image files to upload", type=["jpg", "jpeg",], accept_multiple_files=True)
+
+        if uploaded_files and st.button('Process'):
+            with st.spinner('Processing...'):
+                if not api_key or not credentials_json:
+                    st.error("Please enter both the API Key and the credentials.json content.")
                     return
 
-                if api_key:
-                    genai.configure(api_key=api_key)
+                if len(uploaded_files) > 45:
+                    st.error("You can upload a maximum of 45 files per session.")
+                    return
 
-                    # Generate metadata for images
-                    metadata_list = []
-                    progress_bar = st.progress(0)
-                    files_processed = 0
-                    total_files = len(valid_files)
+                try:
+                    valid_files = [file for file in uploaded_files if file.type in ["image/jpeg", "image/jpg"]]
 
-                    for uploaded_file in valid_files:
-                        try:
-                            # Save the uploaded file temporarily
-                            temp_file_path = os.path.join(tempfile.gettempdir(), uploaded_file.name)
-                            with open(temp_file_path, 'wb') as temp_file:
-                                temp_file.write(uploaded_file.read())
+                    if not valid_files:
+                        st.warning("No valid image files uploaded. Please upload JPG / Jpeg files.")
+                        return
 
-                            # Open the image file
-                            img = Image.open(temp_file_path)
+                    # Check for new day and reset upload count if necessary
+                    if st.session_state['upload_count']['date'] != current_date.date():
+                        st.session_state['upload_count'] = {
+                            'date': current_date.date(),
+                            'count': 0
+                        }
+                    
+                    # Check if remaining uploads are available
+                    if st.session_state['upload_count']['count'] + len(valid_files) > 1000000:
+                        remaining_uploads = 1000000 - st.session_state['upload_count']['count']
+                        st.warning(f"You have exceeded the upload limit. Remaining uploads for today: {remaining_uploads}")
+                        return
+                    else:
+                        st.session_state['upload_count']['count'] += len(valid_files)
+                        st.success(f"Uploads successful. Remaining uploads for today: {1000000 - st.session_state['upload_count']['count']}")
 
-                            # Generate metadata
-                            metadata = generate_metadata(genai, img)
-                            if metadata:  # Proceed only if metadata generation was successful
+                    genai.configure(api_key=api_key)  # Configure AI model with API key
+                    model = genai.GenerativeModel('gemini-pro-vision')
+
+                    # Create a temporary directory to store the uploaded images
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        # Save the uploaded images to the temporary directory
+                        image_paths = []
+                        for file in valid_files:
+                            temp_image_path = os.path.join(temp_dir, file.name)
+                            with open(temp_image_path, 'wb') as f:
+                                f.write(file.read())
+                            image_paths.append(temp_image_path)
+
+                        # Process each image and generate titles and tags using AI
+                        metadata_list = []
+                        process_placeholder = st.empty()
+                        for i, image_path in enumerate(image_paths):
+                            process_placeholder.text(f"Processing Generate Titles and Tags {i + 1}/{len(image_paths)}")
+                            try:
+                                img = Image.open(image_path)
+                                metadata = generate_metadata(model, img)
                                 metadata_list.append(metadata)
-                            time.sleep(3)  # Added delay of 3 seconds
+                            except Exception as e:
+                                st.error(f"An error occurred while generating metadata for {os.path.basename(image_path)}: {e}")
+                                st.error(traceback.format_exc())
+                                continue
 
-                        except Exception as e:
-                            st.error(f"An error occurred while generating metadata for {os.path.basename(temp_file_path)}: {e}")
-                            st.error(traceback.format_exc())
-                            continue
-
-                    if metadata_list:
                         # Embed metadata into images
+                        total_files = len(image_paths)
+                        files_processed = 0
+
+                        # Display the progress bar and current file number
+                        progress_placeholder = st.empty()
+                        progress_bar = progress_placeholder.progress(0)
+                        progress_placeholder.text(f"Processing images 0/{total_files}")
+
                         processed_image_paths = []
-                        for idx, uploaded_file in enumerate(valid_files):
-                            temp_file_path = os.path.join(tempfile.gettempdir(), uploaded_file.name)
-                            metadata = metadata_list[idx]
-                            updated_image_path = embed_metadata(temp_file_path, metadata, progress_bar, files_processed, total_files)
+                        for i, (image_path, metadata) in enumerate(zip(image_paths, metadata_list)):
+                            process_placeholder.text(f"Embedding metadata for image {i + 1}/{len(image_paths)}")
+                            updated_image_path = embed_metadata(image_path, metadata, progress_bar, files_processed, total_files)
                             if updated_image_path:
                                 processed_image_paths.append(updated_image_path)
+                                files_processed += 1
+                                # Update progress bar and current file number
+                                progress_bar.progress(files_processed / total_files)
 
-                        if processed_image_paths:
-                            # Zip the processed images
-                            zip_file_path = zip_processed_images(processed_image_paths)
+                        # Zip processed images
+                        zip_file_path = zip_processed_images(processed_image_paths)
 
-                            if zip_file_path:
-                                st.success("Images processed and zipped successfully.")
+                        if zip_file_path:
+                            # Upload zip file to Google Drive and get the shareable link
+                            credentials = service_account.Credentials.from_service_account_info(json.loads(credentials_json), scopes=['https://www.googleapis.com/auth/drive.file'])
+                            file_id, drive_link = upload_to_drive(zip_file_path, credentials)
+                            st.session_state['uploaded_file_id'] = file_id
 
-                                # Upload the zip file to Google Drive
-                                credentials_info = st.secrets["google_drive_service_account"]
-                                credentials = service_account.Credentials.from_service_account_info(credentials_info)
+                            if drive_link:
+                                st.success("File uploaded to Google Drive successfully!")
+                                st.markdown(f"[Download processed images from Google Drive]({drive_link})")
 
-                                drive_link = upload_to_drive(zip_file_path, credentials)
+                                # Save uploaded file details in session state
+                                st.session_state['uploaded_files'].append({
+                                    'file_id': file_id,
+                                    'file_name': os.path.basename(zip_file_path),
+                                    'drive_link': drive_link
+                                })
 
-                                if drive_link:
-                                    st.success(f"File uploaded to Google Drive successfully! [View File]({drive_link})")
+                except Exception as e:
+                    st.error(f"An error occurred: {e}")
+                    st.error(traceback.format_exc())  # Print detailed error traceback for debugging
 
-                                # Provide a download link for the zip file
-                                with open(zip_file_path, "rb") as file:
-                                    st.download_button(
-                                        label="Download Processed Images",
-                                        data=file,
-                                        file_name=os.path.basename(zip_file_path)
-                                    )
+        # Display uploaded files and add a delete button for each file
+        if st.session_state['uploaded_files']:
+            st.header("Uploaded Files")
+            for uploaded_file in st.session_state['uploaded_files']:
+                file_name = uploaded_file['file_name']
+                file_id = uploaded_file['file_id']
+                drive_link = uploaded_file['drive_link']
+                
+                st.markdown(f"[{file_name}]({drive_link})")
 
-                            # Store the count of uploaded files with date
-                            today_date = datetime.now(JAKARTA_TZ).strftime('%Y-%m-%d')
-                            st.session_state['upload_count'] = {
-                                'date': today_date,
-                                'count': st.session_state['upload_count'].get('count', 0) + len(valid_files)
-                            }
+                if st.button(f'Delete {file_name}', key=file_id):
+                    with st.spinner('Deleting...'):
+                        delete_file_from_drive(file_id, service_account.Credentials.from_service_account_info(json.loads(credentials_json), scopes=['https://www.googleapis.com/auth/drive.file']))
+                        st.session_state['uploaded_files'] = [file for file in st.session_state['uploaded_files'] if file['file_id'] != file_id]
 
-                            # Show the count of uploaded files
-                            st.write(f"Uploaded {len(valid_files)} files today.")
-
-        # Button to delete the uploaded file from Google Drive
-        if st.session_state['uploaded_file_id']:
-            if st.button("Delete Uploaded File from Google Drive"):
-                credentials_info = st.secrets["google_drive_service_account"]
-                credentials = service_account.Credentials.from_service_account_info(credentials_info)
-                delete_from_drive(st.session_state['uploaded_file_id'], credentials)
-                st.session_state['uploaded_file_id'] = None
-
-if __name__ == "__main__":
+if __name__ == '__main__':
     main()

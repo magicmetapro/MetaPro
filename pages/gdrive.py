@@ -12,9 +12,6 @@ import unicodedata
 from datetime import datetime, timedelta
 import pytz
 import json
-from google.oauth2 import service_account
-from googleapiclient.discovery import build
-from googleapiclient.http import MediaFileUpload
 from menu import menu_with_redirect
 
 st.set_option("client.showSidebarNavigation", False)
@@ -120,28 +117,6 @@ def zip_processed_images(image_paths):
 
     except Exception as e:
         st.error(f"An error occurred while zipping images: {e}")
-        st.error(traceback.format_exc())
-        return None
-
-def upload_to_drive(zip_file_path, credentials):
-    try:
-        service = build('drive', 'v3', credentials=credentials)
-        file_metadata = {
-            'name': os.path.basename(zip_file_path),
-            'mimeType': 'application/zip'
-        }
-        media = MediaFileUpload(zip_file_path, mimetype='application/zip', resumable=True)
-        file = service.files().create(body=file_metadata, media_body=media, fields='id,webViewLink').execute()
-
-        # Make the file publicly accessible
-        service.permissions().create(
-            fileId=file['id'],
-            body={'type': 'anyone', 'role': 'reader'}
-        ).execute()
-
-        return file.get('webViewLink')
-    except Exception as e:
-        st.error(f"An error occurred while uploading to Google Drive: {e}")
         st.error(traceback.format_exc())
         return None
 
@@ -286,15 +261,16 @@ def main():
                             zip_file_path = zip_processed_images(processed_image_paths)
 
                             if zip_file_path:
-                               # st.success(f"Successfully zipped processed {zip_file_path}")
+                                # st.success(f"Successfully zipped processed {zip_file_path}")
 
-                                # Upload zip file to Google Drive and get the shareable link
-                                credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/drive.file'])
-                                drive_link = upload_to_drive(zip_file_path, credentials)
-
-                                if drive_link:
-                                    st.success("File uploaded to Google Drive successfully!")
-                                    st.markdown(f"[Download processed images from Google Drive]({drive_link})")
+                                # Provide download link for the local zip file
+                                with open(zip_file_path, "rb") as fp:
+                                    btn = st.download_button(
+                                        label="Download processed images",
+                                        data=fp,
+                                        file_name="processed_images.zip",
+                                        mime="application/zip"
+                                    )
 
                     except Exception as e:
                         st.error(f"An error occurred: {e}")

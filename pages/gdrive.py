@@ -32,6 +32,9 @@ st.markdown("""
             top: 0;
             height: 10vh;
         }
+        .stProgress > div > div > div > div {
+            background-color: #1976d2;
+        }
     </style>
     """, unsafe_allow_html=True)
 
@@ -99,7 +102,7 @@ def embed_metadata(image_path, metadata, progress_bar, files_processed, total_fi
         # Update progress bar
         files_processed += 1
         progress_bar.progress(files_processed / total_files)
-        progress_bar.text(f"Embedding metadata for image {files_processed}/{total_files}")
+        progress_bar.text(f"Embedding metadata for image {files_processed}/{total_files} ({(files_processed / total_files) * 100:.2f}%)")
 
         # Return the updated image path for further processing
         return image_path
@@ -123,7 +126,7 @@ def zip_processed_images(image_paths):
         st.error(traceback.format_exc())
         return None
 
-def upload_to_drive(zip_file_path, credentials):
+def upload_to_drive(zip_file_path, credentials, progress_bar):
     try:
         service = build('drive', 'v3', credentials=credentials)
         file_metadata = {
@@ -131,19 +134,41 @@ def upload_to_drive(zip_file_path, credentials):
             'mimeType': 'application/zip'
         }
         media = MediaFileUpload(zip_file_path, mimetype='application/zip', resumable=True)
-        file = service.files().create(body=file_metadata, media_body=media, fields='id,webViewLink').execute()
+        
+        # Upload in chunks and update progress bar
+        request = service.files().create(body=file_metadata, media_body=media, fields='id,webViewLink')
+        response = None
+        total_size = os.path.getsize(zip_file_path)
+        chunks = 0
+        
+        while response is None:
+            status, response = request.next_chunk()
+            if status:
+                chunks += status.resumable_progress
+                progress = chunks / total_size
+                progress_bar.progress(progress)
+                progress_bar.text(f"Uploading to Google Drive... ({progress * 100:.2f}%)")
 
         # Make the file publicly accessible
         service.permissions().create(
-            fileId=file['id'],
+            fileId=response['id'],
             body={'type': 'anyone', 'role': 'reader'}
         ).execute()
 
-        return file.get('webViewLink')
+        return response
     except Exception as e:
         st.error(f"An error occurred while uploading to Google Drive: {e}")
         st.error(traceback.format_exc())
         return None
+
+def delete_from_drive(file_id, credentials):
+    try:
+        service = build('drive', 'v3', credentials=credentials)
+        service.files().delete(fileId=file_id).execute()
+        st.success("File deleted from Google Drive successfully!")
+    except Exception as e:
+        st.error(f"An error occurred while deleting from Google Drive: {e}")
+        st.error(traceback.format_exc())
 
 def main():
     """Main function for the Streamlit app."""
@@ -215,19 +240,18 @@ def main():
             invalid_files = [file for file in uploaded_files if file not in valid_files]
 
             if invalid_files:
-                st.error("Only JPG and JPEG files are supported.")
+                st.error("Invalid file types detected. Only JPG and JPEG files are supported.")
 
-            if valid_files and st.button("Process"):
-                with st.spinner("Processing..."):
+            if valid_files:
+                if st.button('Process Images'):
                     try:
-                        # Check and update upload count for the current date
-                        if st.session_state['upload_count']['date'] != current_date.date():
+                        today_date_str = current_date.strftime('%Y-%m-%d')
+                        if st.session_state['upload_count']['date'] != today_date_str:
                             st.session_state['upload_count'] = {
-                                'date': current_date.date(),
+                                'date': today_date_str,
                                 'count': 0
                             }
-                        
-                        # Check if remaining uploads are available
+
                         if st.session_state['upload_count']['count'] + len(valid_files) > 1000000:
                             remaining_uploads = 1000000 - st.session_state['upload_count']['count']
                             st.warning(f"You have exceeded the upload limit. Remaining uploads for today: {remaining_uploads}")
@@ -270,7 +294,7 @@ def main():
                             # Display the progress bar and current file number
                             progress_placeholder = st.empty()
                             progress_bar = progress_placeholder.progress(0)
-                            progress_placeholder.text(f"Processing images 0/{total_files}")
+                            progress_placeholder.text(f"Processing images 0/{total_files} (0%)")
 
                             processed_image_paths = []
                             for i, (image_path, metadata) in enumerate(zip(image_paths, metadata_list)):
@@ -281,6 +305,7 @@ def main():
                                     files_processed += 1
                                     # Update progress bar and current file number
                                     progress_bar.progress(files_processed / total_files)
+                                    progress_placeholder.text(f"Processing images {files_processed}/{total_files} ({(files_processed / total_files) * 100:.2f}%)")
 
                             # Zip processed images
                             zip_file_path = zip_processed_images(processed_image_paths)
@@ -290,11 +315,17 @@ def main():
 
                                 # Upload zip file to Google Drive and get the shareable link
                                 credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/drive.file'])
-                                drive_link = upload_to_drive(zip_file_path, credentials)
+                                upload_progress_bar = st.progress(0)  # Blue progress bar for uploading
+                                drive_file = upload_to_drive(zip_file_path, credentials, upload_progress_bar)
+                                drive_link = drive_file.get('webViewLink')
+                                file_id = drive_file.get('id')
 
                                 if drive_link:
                                     st.success("File uploaded to Google Drive successfully!")
                                     st.markdown(f"[Download processed images from Google Drive]({drive_link})")
+
+                                    if st.button("Delete file from Google Drive"):
+                                        delete_from_drive(file_id, credentials)
 
                     except Exception as e:
                         st.error(f"An error occurred: {e}")

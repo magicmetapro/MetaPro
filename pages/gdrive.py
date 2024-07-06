@@ -204,7 +204,7 @@ def main():
             return
         else:
             days_remaining = (expiration_date - current_date).days
-            st.success(f"License valid. You have {days_remaining} days remaining. Max 45 files per upload, unlimited daily uploads.")
+            st.success(f"License valid. You have {days_remaining} days remaining. Max 11145 files per upload, unlimited daily uploads.")
 
         # API Key input
         api_key = st.text_input('Enter your [API](https://makersuite.google.com/app/apikey) Key', value=st.session_state['api_key'] or '')
@@ -234,8 +234,8 @@ def main():
                             }
 
                         total_uploaded = st.session_state['upload_count']['count'] + len(valid_files)
-                        if total_uploaded > 45:
-                            st.error("You have exceeded the maximum upload limit of 45 files for today.")
+                        if total_uploaded > 11145:
+                            st.error("You have exceeded the maximum upload limit of 11145 files for today.")
                             return
 
                         st.session_state['upload_count']['count'] += len(valid_files)

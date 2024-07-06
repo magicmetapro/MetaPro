@@ -57,17 +57,23 @@ def normalize_text(text):
     return normalized
 
 # Function to generate metadata for images using AI model
-def generate_metadata(model, img):
-    caption = model.generate_content(["Create a descriptive title in English up to 12 words long, highlighting the main elements of the image. Identify primary subjects, objects, activities, and context. Include relevant SEO keywords to ensure the title is engaging and informative. Avoid mentioning human names, brand names, product names, or company names.", img])
-    tags = model.generate_content(["Create up to 45 keywords in English that are relevant to the image (each keyword must be one word, separated by commas). Ensure each keyword is a single word, separated by commas.", img])
+def generate_metadata(model, img_path):
+    # Convert image to bytes or a format suitable for the API
+    with open(img_path, 'rb') as img_file:
+        img_bytes = img_file.read()
+
+    caption = model.generate_content(
+        ["Create a descriptive title in English up to 12 words long, highlighting the main elements of the image. Identify primary subjects, objects, activities, and context. Include relevant SEO keywords to ensure the title is engaging and informative. Avoid mentioning human names, brand names, product names, or company names.", img_bytes])
+    tags = model.generate_content(
+        ["Create up to 45 keywords in English that are relevant to the image (each keyword must be one word, separated by commas). Ensure each keyword is a single word, separated by commas.", img_bytes])
 
     # Filter out undesirable characters from the generated tags
     filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
-    
+
     # Trim the generated keywords if they exceed 49 words
     keywords = filtered_tags.split(',')[:49]  # Limit to 49 words
     trimmed_tags = ','.join(keywords)
-    
+
     return {
         'Title': caption.text.strip(),  # Remove leading/trailing whitespace
         'Tags': trimmed_tags.strip()
@@ -226,15 +232,13 @@ def main():
                                 'date': current_date.date(),
                                 'count': 0
                             }
-                        
-                        # Check if remaining uploads are available
-                        if st.session_state['upload_count']['count'] + len(valid_files) > 1000000:
-                            remaining_uploads = 1000000 - st.session_state['upload_count']['count']
-                            st.warning(f"You have exceeded the upload limit. Remaining uploads for today: {remaining_uploads}")
+
+                        total_uploaded = st.session_state['upload_count']['count'] + len(valid_files)
+                        if total_uploaded > 45:
+                            st.error("You have exceeded the maximum upload limit of 45 files for today.")
                             return
-                        else:
-                            st.session_state['upload_count']['count'] += len(valid_files)
-                            st.success(f"Uploads successful. Remaining uploads for today: {1000000 - st.session_state['upload_count']['count']}")
+
+                        st.session_state['upload_count']['count'] += len(valid_files)
 
                         genai.configure(api_key=api_key)  # Configure AI model with API key
                         model = genai.GenerativeModel('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=YOUR_API_KEY')
@@ -255,8 +259,7 @@ def main():
                             for i, image_path in enumerate(image_paths):
                                 process_placeholder.text(f"Processing Generate Titles and Tags {i + 1}/{len(image_paths)}")
                                 try:
-                                    img = Image.open(image_path)
-                                    metadata = generate_metadata(model, img)
+                                    metadata = generate_metadata(model, image_path)
                                     metadata_list.append(metadata)
                                 except Exception as e:
                                     st.error(f"An error occurred while generating metadata for {os.path.basename(image_path)}: {e}")

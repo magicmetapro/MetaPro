@@ -58,9 +58,6 @@ if 'credentials_json' not in st.session_state:
 if 'uploaded_files' not in st.session_state:
     st.session_state['uploaded_files'] = []
 
-# Default path for credentials.json
-DEFAULT_CREDENTIALS_PATH = "credentials.json"
-
 # Function to normalize and clean text
 def normalize_text(text):
     normalized = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
@@ -229,24 +226,14 @@ def main():
             st.session_state['api_key'] = api_key
 
         # Credentials.json input
-        credentials_json = st.text_area('Please enter the content of your credentials.json, or you can leave it blank to use the default metapro', value=st.session_state['credentials_json'] or '')
+        credentials_json = st.text_area('Enter your credentials.json content', value=st.session_state['credentials_json'] or '')
 
-        # Use default credentials.json if input is blank
-        if not credentials_json:
-            try:
-                with open(DEFAULT_CREDENTIALS_PATH, 'r') as f:
-                    credentials_json = f.read()
-                st.session_state['credentials_json'] = credentials_json
-            except Exception as e:
-                st.error("Could not load default credentials.json file.")
-                st.error(traceback.format_exc())
-                return
-        else:
-            # Save credentials in session state
+        # Save credentials in session state
+        if credentials_json:
             st.session_state['credentials_json'] = credentials_json
 
         # Upload file
-        uploaded_files = st.file_uploader("Choose image files to upload", type=["jpg", "jpeg",], accept_multiple_files=True)
+        uploaded_files = st.file_uploader("Choose image files to upload", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
 
         if uploaded_files and st.button('Process'):
             with st.spinner('Processing...'):
@@ -259,10 +246,10 @@ def main():
                     return
 
                 try:
-                    valid_files = [file for file in uploaded_files if file.type in ["image/jpeg", "image/jpg"]]
+                    valid_files = [file for file in uploaded_files if file.type in ["image/jpeg", "image/png"]]
 
                     if not valid_files:
-                        st.warning("No valid image files uploaded. Please upload JPG / Jpeg files.")
+                        st.warning("No valid image files uploaded. Please upload JPG or PNG files.")
                         return
 
                     # Check for new day and reset upload count if necessary

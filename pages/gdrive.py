@@ -139,11 +139,20 @@ def upload_to_drive(zip_file_path, credentials):
             body={'type': 'anyone', 'role': 'reader'}
         ).execute()
 
-        return file.get('webViewLink')
+        return file.get('webViewLink'), file.get('id')
     except Exception as e:
         st.error(f"An error occurred while uploading to Google Drive: {e}")
         st.error(traceback.format_exc())
-        return None
+        return None, None
+
+def delete_from_drive(file_id, credentials):
+    try:
+        service = build('drive', 'v3', credentials=credentials)
+        service.files().delete(fileId=file_id).execute()
+        st.success("File deleted from Google Drive successfully!")
+    except Exception as e:
+        st.error(f"An error occurred while deleting the file from Google Drive: {e}")
+        st.error(traceback.format_exc())
 
 def main():
     """Main function for the Streamlit app."""
@@ -290,30 +299,17 @@ def main():
 
                                 # Upload zip file to Google Drive and get the shareable link
                                 credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/drive.file'])
-                                drive_link = upload_to_drive(zip_file_path, credentials)
+                                drive_link, file_id = upload_to_drive(zip_file_path, credentials)
 
                                 if drive_link:
                                     st.success("File uploaded to Google Drive successfully!")
                                     st.markdown(f"[Download processed images from Google Drive]({drive_link})")
+                                    if st.button("Delete uploaded file from Google Drive"):
+                                        delete_from_drive(file_id, credentials)
 
                     except Exception as e:
                         st.error(f"An error occurred: {e}")
                         st.error(traceback.format_exc())  # Print detailed error traceback for debugging
-
-        # Display uploaded files and add a delete button for each file
-        if st.session_state['uploaded_files']:
-            st.header("Uploaded Files")
-            for uploaded_file in st.session_state['uploaded_files']:
-                file_name = uploaded_file['file_name']
-                file_id = uploaded_file['file_id']
-                drive_link = uploaded_file['drive_link']
-                
-                st.markdown(f"[{file_name}]({drive_link})")
-
-                if st.button(f'Delete {file_name}', key=file_id):
-                    with st.spinner('Deleting...'):
-                        delete_file_from_drive(file_id, service_account.Credentials.from_service_account_info(json.loads(credentials_json), scopes=['https://www.googleapis.com/auth/drive.file']))
-                        st.session_state['uploaded_files'] = [file for file in st.session_state['uploaded_files'] if file['file_id'] != file_id]
 
 if __name__ == '__main__':
     main()

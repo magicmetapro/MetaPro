@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import tempfile
 from PIL import Image
-import google.generativeai as genai
+import requests
 import iptcinfo3
 import zipfile
 import time
@@ -59,21 +59,34 @@ def normalize_text(text):
     normalized = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
     return normalized
 
-# Function to generate metadata for images using AI model
-def generate_metadata(model, img):
-    caption = model.generate_content(["Create a descriptive title in English up to 12 words long, highlighting the main elements of the image. Identify primary subjects, objects, activities, and context. Include relevant SEO keywords to ensure the title is engaging and informative. Avoid mentioning human names, brand names, product names, or company names.", img])
-    tags = model.generate_content(["Create up to 45 keywords in English that are relevant to the image (each keyword must be one word, separated by commas). Ensure each keyword is a single word, separated by commas.", img])
+# Function to generate metadata for images using the specified endpoint
+def generate_metadata(api_key, img):
+    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
+
+    def generate_prompt(prompt):
+        response = requests.post(endpoint, json={'prompt': prompt})
+        if response.status_code == 200:
+            return response.json().get('content', '').strip()
+        else:
+            st.error(f"Error {response.status_code}: {response.text}")
+            return ""
+
+    caption_prompt = "Create a descriptive title in English up to 12 words long, highlighting the main elements of the image. Identify primary subjects, objects, activities, and context. Include relevant SEO keywords to ensure the title is engaging and informative. Avoid mentioning human names, brand names, product names, or company names."
+    tags_prompt = "Create up to 45 keywords in English that are relevant to the image (each keyword must be one word, separated by commas). Ensure each keyword is a single word, separated by commas."
+
+    caption = generate_prompt({"prompt": caption_prompt, "image": img})
+    tags = generate_prompt({"prompt": tags_prompt, "image": img})
 
     # Filter out undesirable characters from the generated tags
-    filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
+    filtered_tags = re.sub(r'[^\w\s,]', '', tags)
     
     # Trim the generated keywords if they exceed 49 words
     keywords = filtered_tags.split(',')[:49]  # Limit to 49 words
     trimmed_tags = ','.join(keywords)
     
     return {
-        'Title': caption.text.strip(),  # Remove leading/trailing whitespace
-        'Tags': trimmed_tags.strip()
+        'Title': caption,
+        'Tags': trimmed_tags
     }
 
 # Function to embed metadata into images
@@ -230,28 +243,20 @@ def main():
             if invalid_files:
                 st.error("Only JPG and JPEG files are supported.")
 
-            if valid_files and st.button("Process"):
+            # Check if the date has changed
+            current_date_str = current_date.date().isoformat()
+            if st.session_state['upload_count']['date'] != current_date_str:
+                st.session_state['upload_count'] = {
+                    'date': current_date_str,
+                    'count': 0
+                }
+
+            # Check upload limit
+            if valid_files and st.session_state['upload_count']['count'] + len(valid_files) > 45:
+                st.error("You have reached the upload limit of 45 files for today.")
+            elif valid_files and st.button("Process"):
                 with st.spinner("Processing..."):
                     try:
-                        # Check and update upload count for the current date
-                        if st.session_state['upload_count']['date'] != current_date.date():
-                            st.session_state['upload_count'] = {
-                                'date': current_date.date(),
-                                'count': 0
-                            }
-                        
-                        # Check if remaining uploads are available
-                        if st.session_state['upload_count']['count'] + len(valid_files) > 1000000:
-                            remaining_uploads = 1000000 - st.session_state['upload_count']['count']
-                            st.warning(f"You have exceeded the upload limit. Remaining uploads for today: {remaining_uploads}")
-                            return
-                        else:
-                            st.session_state['upload_count']['count'] += len(valid_files)
-                            st.success(f"Uploads successful. Remaining uploads for today: {1000000 - st.session_state['upload_count']['count']}")
-
-                        genai.configure(api_key=api_key)  # Configure AI model with API key
-                        model = genai.GenerativeModel('gemini-pro-vision')
-
                         # Create a temporary directory to store the uploaded images
                         with tempfile.TemporaryDirectory() as temp_dir:
                             # Save the uploaded images to the temporary directory
@@ -269,7 +274,7 @@ def main():
                                 process_placeholder.text(f"Processing Generate Titles and Tags {i + 1}/{len(image_paths)}")
                                 try:
                                     img = Image.open(image_path)
-                                    metadata = generate_metadata(model, img)
+                                    metadata = generate_metadata(api_key, img)
                                     metadata_list.append(metadata)
                                     st.write(f"Image {i + 1}:")
                                     st.write(f"Title: {metadata['Title']}")
@@ -309,6 +314,9 @@ def main():
                                     st.success("File uploaded to Google Drive successfully!")
                                     st.markdown(f"[Download processed images from Google Drive]({drive_link})")
                                     st.session_state['drive_file_id'] = file_id
+
+                            # Update the upload count
+                            st.session_state['upload_count']['count'] += len(valid_files)
 
                     except Exception as e:
                         st.error(f"An error occurred: {e}")

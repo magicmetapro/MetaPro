@@ -2,7 +2,7 @@ import streamlit as st
 import os
 import tempfile
 from PIL import Image
-import requests
+import google.generativeai as genai
 import iptcinfo3
 import zipfile
 import time
@@ -59,45 +59,20 @@ def normalize_text(text):
     normalized = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
     return normalized
 
-# Function to generate metadata for images using the new generative model API
-def generate_metadata(api_key, img):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key={api_key}"
-    headers = {
-        "Content-Type": "application/json"
-    }
-
-    data = {
-        "prompt": {
-            "messages": [
-                {
-                    "content": "Create a descriptive title in English up to 12 words long, highlighting the main elements of the image. Identify primary subjects, objects, activities, and context. Include relevant SEO keywords to ensure the title is engaging and informative. Avoid mentioning human names, brand names, product names, or company names.",
-                    "image": img
-                }
-            ]
-        }
-    }
-
-    response = requests.post(url, headers=headers, data=json.dumps(data))
-    response_data = response.json()
-
-    caption = response_data.get('results')[0].get('content')
-
-    data["prompt"]["messages"][0]["content"] = "Create up to 45 keywords in English that are relevant to the image (each keyword must be one word, separated by commas). Ensure each keyword is a single word, separated by commas."
-
-    response = requests.post(url, headers=headers, data=json.dumps(data))
-    response_data = response.json()
-
-    tags = response_data.get('results')[0].get('content')
+# Function to generate metadata for images using AI model
+def generate_metadata(model, img):
+    caption = model.generate_content(["Create a descriptive title in English up to 12 words long, highlighting the main elements of the image. Identify primary subjects, objects, activities, and context. Include relevant SEO keywords to ensure the title is engaging and informative. Avoid mentioning human names, brand names, product names, or company names.", img])
+    tags = model.generate_content(["Create up to 45 keywords in English that are relevant to the image (each keyword must be one word, separated by commas). Ensure each keyword is a single word, separated by commas.", img])
 
     # Filter out undesirable characters from the generated tags
-    filtered_tags = re.sub(r'[^\w\s,]', '', tags)
+    filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
     
     # Trim the generated keywords if they exceed 49 words
     keywords = filtered_tags.split(',')[:49]  # Limit to 49 words
     trimmed_tags = ','.join(keywords)
     
     return {
-        'Title': caption.strip(),  # Remove leading/trailing whitespace
+        'Title': caption.text.strip(),  # Remove leading/trailing whitespace
         'Tags': trimmed_tags.strip()
     }
 
@@ -245,33 +220,26 @@ def main():
         if api_key:
             st.session_state['api_key'] = api_key
 
-        # File upload
-        uploaded_files = st.file_uploader("Choose images", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
-
-        # Get the current date
-        current_date = datetime.now(JAKARTA_TZ).date()
-
-        # Reset upload count if the date has changed
-        if st.session_state['upload_count']['date'] != current_date:
-            st.session_state['upload_count'] = {
-                'date': current_date,
-                'count': 0
-            }
+        # Upload image files
+        uploaded_files = st.file_uploader('Upload Images (Only JPG and JPEG Supported)', accept_multiple_files=True)
 
         if uploaded_files:
-            valid_files = []
-            for uploaded_file in uploaded_files:
-                file_size_mb = len(uploaded_file.getbuffer()) / (1024 * 1024)
-                if file_size_mb <= 1.0:
-                    valid_files.append(uploaded_file)
-                else:
-                    st.warning(f"File {uploaded_file.name} exceeds the 1MB size limit and will be skipped.")
+            valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', 'image/jpg']]
+            invalid_files = [file for file in uploaded_files if file not in valid_files]
 
-            if st.button("Generate Titles and Tags"):
-                if not api_key:
-                    st.error("Please enter your API key.")
-                else:
+            if invalid_files:
+                st.error("Only JPG and JPEG files are supported.")
+
+            if valid_files and st.button("Process"):
+                with st.spinner("Processing..."):
                     try:
+                        # Check and update upload count for the current date
+                        if st.session_state['upload_count']['date'] != current_date.date():
+                            st.session_state['upload_count'] = {
+                                'date': current_date.date(),
+                                'count': 0
+                            }
+                        
                         # Check if remaining uploads are available
                         if st.session_state['upload_count']['count'] + len(valid_files) > 1000000:
                             remaining_uploads = 1000000 - st.session_state['upload_count']['count']
@@ -280,6 +248,9 @@ def main():
                         else:
                             st.session_state['upload_count']['count'] += len(valid_files)
                             st.success(f"Uploads successful. Remaining uploads for today: {1000000 - st.session_state['upload_count']['count']}")
+
+                        genai.configure(api_key=api_key)  # Configure AI model with API key
+                        model = genai.GenerativeModel('gemini-pro-vision')
 
                         # Create a temporary directory to store the uploaded images
                         with tempfile.TemporaryDirectory() as temp_dir:
@@ -298,7 +269,7 @@ def main():
                                 process_placeholder.text(f"Processing Generate Titles and Tags {i + 1}/{len(image_paths)}")
                                 try:
                                     img = Image.open(image_path)
-                                    metadata = generate_metadata(api_key, img)
+                                    metadata = generate_metadata(model, img)
                                     metadata_list.append(metadata)
                                 except Exception as e:
                                     st.error(f"An error occurred while generating metadata for {os.path.basename(image_path)}: {e}")

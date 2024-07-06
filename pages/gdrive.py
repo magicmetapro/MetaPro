@@ -271,6 +271,9 @@ def main():
                                     img = Image.open(image_path)
                                     metadata = generate_metadata(model, img)
                                     metadata_list.append(metadata)
+                                    st.write(f"Image {i + 1}:")
+                                    st.write(f"Title: {metadata['Title']}")
+                                    st.write(f"Tags: {metadata['Tags']}")
                                 except Exception as e:
                                     st.error(f"An error occurred while generating metadata for {os.path.basename(image_path)}: {e}")
                                     st.error(traceback.format_exc())

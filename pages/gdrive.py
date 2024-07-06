@@ -139,20 +139,11 @@ def upload_to_drive(zip_file_path, credentials):
             body={'type': 'anyone', 'role': 'reader'}
         ).execute()
 
-        return file.get('webViewLink'), file.get('id')
+        return file.get('webViewLink')
     except Exception as e:
         st.error(f"An error occurred while uploading to Google Drive: {e}")
         st.error(traceback.format_exc())
-        return None, None
-
-def delete_from_drive(file_id, credentials):
-    try:
-        service = build('drive', 'v3', credentials=credentials)
-        service.files().delete(fileId=file_id).execute()
-        st.success("File deleted from Google Drive successfully!")
-    except Exception as e:
-        st.error(f"An error occurred while deleting the file from Google Drive: {e}")
-        st.error(traceback.format_exc())
+        return None
 
 def main():
     """Main function for the Streamlit app."""
@@ -246,7 +237,7 @@ def main():
                             st.success(f"Uploads successful. Remaining uploads for today: {1000000 - st.session_state['upload_count']['count']}")
 
                         genai.configure(api_key=api_key)  # Configure AI model with API key
-                        model = genai.GenerativeModel('gemini-pro-vision')
+                        model = genai.GenerativeModel('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=YOUR_API_KEY')
 
                         # Create a temporary directory to store the uploaded images
                         with tempfile.TemporaryDirectory() as temp_dir:
@@ -299,13 +290,11 @@ def main():
 
                                 # Upload zip file to Google Drive and get the shareable link
                                 credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/drive.file'])
-                                drive_link, file_id = upload_to_drive(zip_file_path, credentials)
+                                drive_link = upload_to_drive(zip_file_path, credentials)
 
                                 if drive_link:
                                     st.success("File uploaded to Google Drive successfully!")
                                     st.markdown(f"[Download processed images from Google Drive]({drive_link})")
-                                    if st.button("Delete uploaded file from Google Drive"):
-                                        delete_from_drive(file_id, credentials)
 
                     except Exception as e:
                         st.error(f"An error occurred: {e}")

@@ -1,3 +1,4 @@
+
 import streamlit as st
 import os
 import tempfile
@@ -15,10 +16,12 @@ import json
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-
+from menu import menu_with_redirect
 
 st.set_option("client.showSidebarNavigation", False)
 
+# Redirect to app.py if not logged in, otherwise show the navigation menu
+menu_with_redirect()
 
 # Apply custom styling
 st.markdown("""
@@ -48,9 +51,6 @@ if 'upload_count' not in st.session_state:
 
 if 'api_key' not in st.session_state:
     st.session_state['api_key'] = None
-
-if 'failed_files' not in st.session_state:
-    st.session_state['failed_files'] = []
 
 # Function to normalize and clean text
 def normalize_text(text):
@@ -108,7 +108,6 @@ def embed_metadata(image_path, metadata, progress_bar, files_processed, total_fi
     except Exception as e:
         st.error(f"An error occurred while embedding metadata: {e}")
         st.error(traceback.format_exc())  # Print detailed error traceback for debugging
-        return None
 
 def zip_processed_images(image_paths):
     try:
@@ -261,7 +260,6 @@ def main():
                                     metadata = generate_metadata(model, img)
                                     metadata_list.append(metadata)
                                 except Exception as e:
-                                    st.session_state['failed_files'].append(image_path)
                                     st.error(f"An error occurred while generating metadata for {os.path.basename(image_path)}: {e}")
                                     st.error(traceback.format_exc())
                                     continue
@@ -289,7 +287,7 @@ def main():
                             zip_file_path = zip_processed_images(processed_image_paths)
 
                             if zip_file_path:
-                                # st.success(f"Successfully zipped processed {zip_file_path}")
+                               # st.success(f"Successfully zipped processed {zip_file_path}")
 
                                 # Upload zip file to Google Drive and get the shareable link
                                 credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/drive.file'])
@@ -302,62 +300,6 @@ def main():
                     except Exception as e:
                         st.error(f"An error occurred: {e}")
                         st.error(traceback.format_exc())  # Print detailed error traceback for debugging
-
-            # Retry failed files
-            if st.session_state['failed_files']:
-                if st.button("Retry Failed Files"):
-                    with st.spinner("Retrying failed files..."):
-                        failed_files = st.session_state['failed_files']
-                        st.session_state['failed_files'] = []
-
-                        with tempfile.TemporaryDirectory() as temp_dir:
-                            # Process each failed file and generate titles and tags using AI
-                            metadata_list = []
-                            process_placeholder = st.empty()
-                            for i, image_path in enumerate(failed_files):
-                                process_placeholder.text(f"Retrying Generate Titles and Tags {i + 1}/{len(failed_files)}")
-                                try:
-                                    img = Image.open(image_path)
-                                    metadata = generate_metadata(model, img)
-                                    metadata_list.append(metadata)
-                                except Exception as e:
-                                    st.session_state['failed_files'].append(image_path)
-                                    st.error(f"An error occurred while generating metadata for {os.path.basename(image_path)}: {e}")
-                                    st.error(traceback.format_exc())
-                                    continue
-
-                            # Embed metadata into images
-                            total_files = len(failed_files)
-                            files_processed = 0
-
-                            # Display the progress bar and current file number
-                            progress_placeholder = st.empty()
-                            progress_bar = progress_placeholder.progress(0)
-                            progress_placeholder.text(f"Processing images 0/{total_files}")
-
-                            processed_image_paths = []
-                            for i, (image_path, metadata) in enumerate(zip(failed_files, metadata_list)):
-                                process_placeholder.text(f"Embedding metadata for image {i + 1}/{len(failed_files)}")
-                                updated_image_path = embed_metadata(image_path, metadata, progress_bar, files_processed, total_files)
-                                if updated_image_path:
-                                    processed_image_paths.append(updated_image_path)
-                                    files_processed += 1
-                                    # Update progress bar and current file number
-                                    progress_bar.progress(files_processed / total_files)
-
-                            # Zip processed images
-                            zip_file_path = zip_processed_images(processed_image_paths)
-
-                            if zip_file_path:
-                                # st.success(f"Successfully zipped processed {zip_file_path}")
-
-                                # Upload zip file to Google Drive and get the shareable link
-                                credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/drive.file'])
-                                drive_link = upload_to_drive(zip_file_path, credentials)
-
-                                if drive_link:
-                                    st.success("File uploaded to Google Drive successfully!")
-                                    st.markdown(f"[Download processed images from Google Drive]({drive_link})")
 
 if __name__ == '__main__':
     main()

@@ -1,4 +1,3 @@
-
 import streamlit as st
 import os
 import tempfile
@@ -51,6 +50,9 @@ if 'upload_count' not in st.session_state:
 
 if 'api_key' not in st.session_state:
     st.session_state['api_key'] = None
+
+if 'uploaded_file_id' not in st.session_state:
+    st.session_state['uploaded_file_id'] = None
 
 # Function to normalize and clean text
 def normalize_text(text):
@@ -140,11 +142,21 @@ def upload_to_drive(zip_file_path, credentials):
             body={'type': 'anyone', 'role': 'reader'}
         ).execute()
 
+        st.session_state['uploaded_file_id'] = file.get('id')
         return file.get('webViewLink')
     except Exception as e:
         st.error(f"An error occurred while uploading to Google Drive: {e}")
         st.error(traceback.format_exc())
         return None
+
+def delete_from_drive(file_id, credentials):
+    try:
+        service = build('drive', 'v3', credentials=credentials)
+        service.files().delete(fileId=file_id).execute()
+        st.success("File deleted from Google Drive successfully!")
+    except Exception as e:
+        st.error(f"An error occurred while deleting the file from Google Drive: {e}")
+        st.error(traceback.format_exc())
 
 def main():
     """Main function for the Streamlit app."""
@@ -300,6 +312,16 @@ def main():
                     except Exception as e:
                         st.error(f"An error occurred: {e}")
                         st.error(traceback.format_exc())  # Print detailed error traceback for debugging
+
+    if st.session_state['uploaded_file_id']:
+        if st.button("Delete Uploaded File from Google Drive"):
+            with st.spinner("Deleting file..."):
+                try:
+                    credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/drive.file'])
+                    delete_from_drive(st.session_state['uploaded_file_id'], credentials)
+                    st.session_state['uploaded_file_id'] = None
+                except Exception as e:
+                    st.error(f"An error occurred while deleting the file: {e}")
 
 if __name__ == '__main__':
     main()

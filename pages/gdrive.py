@@ -85,26 +85,29 @@ def embed_metadata(image_path, metadata, progress_bar, files_processed, total_fi
         # Open the image file
         img = Image.open(image_path)
 
-        # Load existing IPTC data (if any)
-        iptc_data = iptcinfo3.IPTCInfo(image_path, force=True)
+        # If the image is PNG, use a different method to embed metadata (pngmetadata or other techniques)
+        if img.format == "PNG":
+            # Assuming we're using a hypothetical method to embed metadata into PNG files
+            from pngmetadata import PngMetadata
+            png = PngMetadata(image_path)
+            png.set_text("Artist", metadata.get('Title', ''))
+            png.set_text("Software", metadata.get('Tags', ''))
+            png.save(image_path)  # Save the image with updated metadata
+        else:
+            # For JPG/JPEG images, continue with iptcinfo3
+            iptc_data = iptcinfo3.IPTCInfo(image_path, force=True)
+            for tag in iptc_data._data:
+                iptc_data._data[tag] = []  # Clear existing metadata
 
-        # Clear existing IPTC metadata
-        for tag in iptc_data._data:
-            iptc_data._data[tag] = []
-
-        # Update IPTC data with new metadata
-        iptc_data['keywords'] = [metadata.get('Tags', '')]  # Keywords
-        iptc_data['caption/abstract'] = [metadata.get('Title', '')]  # Title
-
-        # Save the image with the embedded metadata
-        iptc_data.save()
+            iptc_data['keywords'] = [metadata.get('Tags', '')]  # Keywords
+            iptc_data['caption/abstract'] = [metadata.get('Title', '')]  # Title
+            iptc_data.save()  # Save the image with updated metadata
 
         # Update progress bar
         files_processed += 1
         progress_bar.progress(files_processed / total_files)
         progress_bar.text(f"Embedding metadata for image {files_processed}/{total_files}")
 
-        # Return the updated image path for further processing
         return image_path
 
     except Exception as e:

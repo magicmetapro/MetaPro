@@ -1,3 +1,5 @@
+
+You said:
 import streamlit as st
 import os
 import tempfile
@@ -221,96 +223,97 @@ def main():
             st.session_state['api_key'] = api_key
 
         # Upload image files
-uploaded_files = st.file_uploader('Upload Images (Only JPG, JPEG, and PNG Supported)', accept_multiple_files=True)
+        uploaded_files = st.file_uploader('Upload Images (Only JPG and JPEG Supported)', accept_multiple_files=True)
 
-if uploaded_files:
-    # Filter valid files (JPG, JPEG, and PNG)
-    valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', 'image/jpg', 'image/png']]
-    invalid_files = [file for file in uploaded_files if file not in valid_files]
+        if uploaded_files:
+            valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', 'image/jpg']]
+            invalid_files = [file for file in uploaded_files if file not in valid_files]
 
-    if invalid_files:
-        st.error("Only JPG, JPEG, and PNG files are supported.")
+            if invalid_files:
+                st.error("Only JPG and JPEG files are supported.")
 
-    if valid_files and st.button("Process"):
-        with st.spinner("Processing..."):
-            try:
-                # Check and update upload count for the current date
-                if st.session_state['upload_count']['date'] != current_date.date():
-                    st.session_state['upload_count'] = {
-                        'date': current_date.date(),
-                        'count': 0
-                    }
+            if valid_files and st.button("Process"):
+                with st.spinner("Processing..."):
+                    try:
+                        # Check and update upload count for the current date
+                        if st.session_state['upload_count']['date'] != current_date.date():
+                            st.session_state['upload_count'] = {
+                                'date': current_date.date(),
+                                'count': 0
+                            }
+                        
+                        # Check if remaining uploads are available
+                        if st.session_state['upload_count']['count'] + len(valid_files) > 1000000:
+                            remaining_uploads = 1000000 - st.session_state['upload_count']['count']
+                            st.warning(f"You have exceeded the upload limit. Remaining uploads for today: {remaining_uploads}")
+                            return
+                        else:
+                            st.session_state['upload_count']['count'] += len(valid_files)
+                            st.success(f"Uploads successful. Remaining uploads for today: {1000000 - st.session_state['upload_count']['count']}")
 
-                # Check if remaining uploads are available
-                if st.session_state['upload_count']['count'] + len(valid_files) > 1000000:
-                    remaining_uploads = 1000000 - st.session_state['upload_count']['count']
-                    st.warning(f"You have exceeded the upload limit. Remaining uploads for today: {remaining_uploads}")
-                    return
-                else:
-                    st.session_state['upload_count']['count'] += len(valid_files)
-                    st.success(f"Uploads successful. Remaining uploads for today: {1000000 - st.session_state['upload_count']['count']}")
+                        genai.configure(api_key=api_key)  # Configure AI model with API key
+                        model = genai.GenerativeModel('gemini-1.5-flash')
 
-                genai.configure(api_key=api_key)  # Configure AI model with API key
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                        # Create a temporary directory to store the uploaded images
+                        with tempfile.TemporaryDirectory() as temp_dir:
+                            # Save the uploaded images to the temporary directory
+                            image_paths = []
+                            for file in valid_files:
+                                temp_image_path = os.path.join(temp_dir, file.name)
+                                with open(temp_image_path, 'wb') as f:
+                                    f.write(file.read())
+                                image_paths.append(temp_image_path)
 
-                # Create a temporary directory to store the uploaded images
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    # Save the uploaded images to the temporary directory
-                    image_paths = []
-                    for file in valid_files:
-                        temp_image_path = os.path.join(temp_dir, file.name)
-                        with open(temp_image_path, 'wb') as f:
-                            f.write(file.read())
-                        image_paths.append(temp_image_path)
+                            # Process each image and generate titles and tags using AI
+                            metadata_list = []
+                            process_placeholder = st.empty()
+                            for i, image_path in enumerate(image_paths):
+                                process_placeholder.text(f"Processing Generate Titles and Tags {i + 1}/{len(image_paths)}")
+                                try:
+                                    img = Image.open(image_path)
+                                    metadata = generate_metadata(model, img)
+                                    metadata_list.append(metadata)
+                                except Exception as e:
+                                    st.error(f"An error occurred while generating metadata for {os.path.basename(image_path)}: {e}")
+                                    st.error(traceback.format_exc())
+                                    continue
 
-                    # Process each image and generate titles and tags using AI
-                    metadata_list = []
-                    process_placeholder = st.empty()
-                    for i, image_path in enumerate(image_paths):
-                        process_placeholder.text(f"Processing Generate Titles and Tags {i + 1}/{len(image_paths)}")
-                        try:
-                            img = Image.open(image_path)
-                            metadata = generate_metadata(model, img)
-                            metadata_list.append(metadata)
-                        except Exception as e:
-                            st.error(f"An error occurred while generating metadata for {os.path.basename(image_path)}: {e}")
-                            st.error(traceback.format_exc())
-                            continue
+                            # Embed metadata into images
+                            total_files = len(image_paths)
+                            files_processed = 0
 
-                    # Embed metadata into images
-                    total_files = len(image_paths)
-                    files_processed = 0
+                            # Display the progress bar and current file number
+                            progress_placeholder = st.empty()
+                            progress_bar = progress_placeholder.progress(0)
+                            progress_placeholder.text(f"Processing images 0/{total_files}")
 
-                    # Display the progress bar and current file number
-                    progress_placeholder = st.empty()
-                    progress_bar = progress_placeholder.progress(0)
-                    progress_placeholder.text(f"Processing images 0/{total_files}")
+                            processed_image_paths = []
+                            for i, (image_path, metadata) in enumerate(zip(image_paths, metadata_list)):
+                                process_placeholder.text(f"Embedding metadata for image {i + 1}/{len(image_paths)}")
+                                updated_image_path = embed_metadata(image_path, metadata, progress_bar, files_processed, total_files)
+                                if updated_image_path:
+                                    processed_image_paths.append(updated_image_path)
+                                    files_processed += 1
+                                    # Update progress bar and current file number
+                                    progress_bar.progress(files_processed / total_files)
 
-                    processed_image_paths = []
-                    for i, (image_path, metadata) in enumerate(zip(image_paths, metadata_list)):
-                        process_placeholder.text(f"Embedding metadata for image {i + 1}/{len(image_paths)}")
-                        updated_image_path = embed_metadata(image_path, metadata, progress_bar, files_processed, total_files)
-                        if updated_image_path:
-                            processed_image_paths.append(updated_image_path)
-                            files_processed += 1
-                            # Update progress bar and current file number
-                            progress_bar.progress(files_processed / total_files)
+                            # Zip processed images
+                            zip_file_path = zip_processed_images(processed_image_paths)
 
-                    # Zip processed images
-                    zip_file_path = zip_processed_images(processed_image_paths)
+                            if zip_file_path:
+                               # st.success(f"Successfully zipped processed {zip_file_path}")
 
-                    if zip_file_path:
-                        # Upload zip file to Google Drive and get the shareable link
-                        credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/drive.file'])
-                        drive_link = upload_to_drive(zip_file_path, credentials)
+                                # Upload zip file to Google Drive and get the shareable link
+                                credentials = service_account.Credentials.from_service_account_file('credentials.json', scopes=['https://www.googleapis.com/auth/drive.file'])
+                                drive_link = upload_to_drive(zip_file_path, credentials)
 
-                        if drive_link:
-                            st.success("File uploaded to Google Drive successfully!")
-                            st.markdown(f"[Download processed images from Google Drive]({drive_link})")
+                                if drive_link:
+                                    st.success("File uploaded to Google Drive successfully!")
+                                    st.markdown(f"[Download processed images from Google Drive]({drive_link})")
 
-            except Exception as e:
-                st.error(f"An error occurred: {e}")
-                st.error(traceback.format_exc())  # Print detailed error traceback for debugging
+                    except Exception as e:
+                        st.error(f"An error occurred: {e}")
+                        st.error(traceback.format_exc())  # Print detailed error traceback for debugging
 
     if st.session_state['uploaded_file_id']:
         if st.button("Delete Uploaded File from Google Drive"):

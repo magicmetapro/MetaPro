@@ -5,7 +5,7 @@ piexif
 streamlit
 Pillow
 piexif
-iptcinfo3
+iptcinfo3==2.1.4
 tenacity
 protobuf
 google-auth

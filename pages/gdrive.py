@@ -224,7 +224,7 @@ def main():
         uploaded_files = st.file_uploader('Upload Images (Only JPG, PNG and JPEG Supported)', accept_multiple_files=True)
 
         if uploaded_files:
-            valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', image/png', 'image/jpg']]
+            valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', 'image/png', 'image/jpg']]
             invalid_files = [file for file in uploaded_files if file not in valid_files]
 
             if invalid_files:

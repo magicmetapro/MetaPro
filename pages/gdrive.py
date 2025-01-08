@@ -57,12 +57,19 @@ if 'uploaded_file_id' not in st.session_state:
 # Function to normalize and clean text
 def normalize_text(text):
     normalized = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
-    return normalized
+    cleaned = re.sub(r'[^a-zA-Z0-9_\-\s]', '', normalized).strip()
+    return cleaned
 
 # Function to generate metadata for images using AI model
 def generate_metadata(model, img):
-    caption = model.generate_content(["Analyze the uploaded image and generate create a specific, descriptive, and informative title for an image. The title should clearly describe the capture all relevant aspects of the image, including actions, objects, emotions, environment, and context, subject, and atmosphere of the scene, make the result into 1 line or answer only A title that describes the image briefly and accurately.", img])
-    tags = model.generate_content(["Analyze the uploaded image and generate a comprehensive list of keywords that capture all relevant aspects of the image, including actions, objects, emotions, environment, and context. The first 5 keywords must be the most relevant to the image. Ensure each keyword is a single word and separated by commas.", img])
+    caption = model.generate_content([
+        "Analyze the uploaded image and generate a specific, descriptive, and informative title for the image. The title should clearly describe the capture all relevant aspects of the image, including actions, objects, emotions, environment, and context. Make the result one line only.",
+        img
+    ])
+    tags = model.generate_content([
+        "Analyze the uploaded image and generate a comprehensive list of keywords that capture all relevant aspects of the image, including actions, objects, emotions, environment, and context. Ensure each keyword is a single word and separated by commas.",
+        img
+    ])
 
     # Filter out undesirable characters from the generated tags
     filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
@@ -70,13 +77,13 @@ def generate_metadata(model, img):
     # Trim the generated keywords if they exceed 49 words
     keywords = filtered_tags.split(',')[:49]  # Limit to 49 words
     trimmed_tags = ','.join(keywords)
-    
+
     return {
         'Title': caption.text.strip(),  # Remove leading/trailing whitespace
         'Tags': trimmed_tags.strip()
     }
 
-# Function to embed metadata into images
+# Function to embed metadata into images and rename based on title
 def embed_metadata(image_path, metadata, progress_bar, files_processed, total_files):
     try:
         # Simulate delay
@@ -99,17 +106,30 @@ def embed_metadata(image_path, metadata, progress_bar, files_processed, total_fi
         # Save the image with the embedded metadata
         iptc_data.save()
 
+        # Rename the file based on the generated title
+        base_dir = os.path.dirname(image_path)
+        normalized_title = normalize_text(metadata['Title'])
+        new_image_path = os.path.join(base_dir, f"{normalized_title}.jpg")
+
+        # Ensure unique file names
+        counter = 1
+        while os.path.exists(new_image_path):
+            new_image_path = os.path.join(base_dir, f"{normalized_title}_{counter}.jpg")
+            counter += 1
+
+        os.rename(image_path, new_image_path)
+
         # Update progress bar
         files_processed += 1
         progress_bar.progress(files_processed / total_files)
         progress_bar.text(f"Embedding metadata for image {files_processed}/{total_files}")
 
-        # Return the updated image path for further processing
-        return image_path
+        return new_image_path
 
     except Exception as e:
         st.error(f"An error occurred while embedding metadata: {e}")
         st.error(traceback.format_exc())  # Print detailed error traceback for debugging
+
 
 def zip_processed_images(image_paths):
     try:
@@ -125,6 +145,7 @@ def zip_processed_images(image_paths):
         st.error(f"An error occurred while zipping images: {e}")
         st.error(traceback.format_exc())
         return None
+
 
 def upload_to_drive(zip_file_path, credentials):
     try:
@@ -149,6 +170,7 @@ def upload_to_drive(zip_file_path, credentials):
         st.error(traceback.format_exc())
         return None
 
+
 def delete_from_drive(file_id, credentials):
     try:
         service = build('drive', 'v3', credentials=credentials)
@@ -157,6 +179,7 @@ def delete_from_drive(file_id, credentials):
     except Exception as e:
         st.error(f"An error occurred while deleting the file from Google Drive: {e}")
         st.error(traceback.format_exc())
+
 
 def convert_to_jpeg(image_path):
     try:

@@ -158,6 +158,28 @@ def delete_from_drive(file_id, credentials):
         st.error(f"An error occurred while deleting the file from Google Drive: {e}")
         st.error(traceback.format_exc())
 
+def convert_to_jpeg(image_path):
+    try:
+        # Open the image
+        img = Image.open(image_path)
+
+        # Check if the image is already in JPEG format, if not convert it
+        if img.format != 'JPEG':
+            # Convert the image to RGB before saving it as JPEG (necessary for PNG images)
+            img = img.convert('RGB')
+
+            # Create a new path for the JPEG file
+            jpeg_image_path = image_path.rsplit('.', 1)[0] + '.jpg'
+
+            # Save the image as JPEG with 100% quality
+            img.save(jpeg_image_path, 'JPEG', quality=100)
+            return jpeg_image_path
+        else:
+            # If the image is already in JPEG format, return the original path
+            return image_path
+    except Exception as e:
+        raise Exception(f"An error occurred while converting the image: {e}")
+
 def main():
     """Main function for the Streamlit app."""
 
@@ -260,7 +282,12 @@ def main():
                                 temp_image_path = os.path.join(temp_dir, file.name)
                                 with open(temp_image_path, 'wb') as f:
                                     f.write(file.read())
-                                image_paths.append(temp_image_path)
+                                
+                                # Convert to JPEG if needed
+                                jpeg_image_path = convert_to_jpeg(temp_image_path)
+
+                                # Append the path of the converted (or original JPEG) image
+                                image_paths.append(jpeg_image_path)
 
                             # Process each image and generate titles and tags using AI
                             metadata_list = []

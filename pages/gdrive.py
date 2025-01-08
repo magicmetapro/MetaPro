@@ -250,7 +250,7 @@ def main():
                             st.success(f"Uploads successful. Remaining uploads for today: {1000000 - st.session_state['upload_count']['count']}")
 
                         genai.configure(api_key=api_key)  # Configure AI model with API key
-                        model = genai.GenerativeModel('gemini-pro-vision')
+                        model = genai.GenerativeModel('gemini-1.5-flash')
 
                         # Create a temporary directory to store the uploaded images
                         with tempfile.TemporaryDirectory() as temp_dir:

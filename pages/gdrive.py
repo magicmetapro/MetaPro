@@ -86,16 +86,23 @@ def embed_metadata(image_path, metadata, progress_bar, files_processed, total_fi
         # Open the image file
         img = Image.open(image_path)
 
-        # If the image is PNG, use a different method to embed metadata (pngmetadata or other techniques)
+        # Check if the image is PNG
         if img.format == "PNG":
-            # Assuming we're using a hypothetical method to embed metadata into PNG files
-            from pngmetadata import PngMetadata
-            png = PngMetadata(image_path)
-            png.set_text("Artist", metadata.get('Title', ''))
-            png.set_text("Software", metadata.get('Tags', ''))
-            png.save(image_path)  # Save the image with updated metadata
+            # For PNG, embed metadata using Pillow (add text chunks)
+            text_metadata = {
+                "Title": metadata.get('Title', ''),
+                "Tags": metadata.get('Tags', '')
+            }
+            # Add the metadata to the PNG file (using text chunk)
+            if isinstance(img, PngImagePlugin.PngImageFile):
+                # Adding metadata as text chunks
+                for key, value in text_metadata.items():
+                    img.text[key] = value
+
+            # Save the updated PNG with metadata
+            img.save(image_path)
         else:
-            # For JPG/JPEG images, continue with iptcinfo3
+            # For JPG/JPEG images, use iptcinfo3
             iptc_data = iptcinfo3.IPTCInfo(image_path, force=True)
             for tag in iptc_data._data:
                 iptc_data._data[tag] = []  # Clear existing metadata
@@ -112,6 +119,7 @@ def embed_metadata(image_path, metadata, progress_bar, files_processed, total_fi
         return image_path
 
     except Exception as e:
+        # Display error details
         st.error(f"An error occurred while embedding metadata: {e}")
         st.error(traceback.format_exc())  # Print detailed error traceback for debugging
 

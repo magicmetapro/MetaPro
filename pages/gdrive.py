@@ -221,10 +221,10 @@ def main():
             st.session_state['api_key'] = api_key
 
         # Upload image files
-        uploaded_files = st.file_uploader('Upload Images (Only JPG and JPEG Supported)', accept_multiple_files=True)
+        uploaded_files = st.file_uploader('Upload Images (Only JPG, PNG and JPEG Supported)', accept_multiple_files=True)
 
         if uploaded_files:
-            valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', 'image/jpg']]
+            valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', image/png', 'image/jpg']]
             invalid_files = [file for file in uploaded_files if file not in valid_files]
 
             if invalid_files:

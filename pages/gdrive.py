@@ -1,4 +1,3 @@
-from PIL import Image, PngImagePlugin
 import streamlit as st
 import os
 import tempfile
@@ -86,40 +85,29 @@ def embed_metadata(image_path, metadata, progress_bar, files_processed, total_fi
         # Open the image file
         img = Image.open(image_path)
 
-        # Check if the image is PNG
-        if img.format == "PNG":
-            # For PNG, embed metadata using Pillow (add text chunks)
-            text_metadata = {
-                "Title": metadata.get('Title', ''),
-                "Tags": metadata.get('Tags', '')
-            }
-            # Add the metadata to the PNG file (using text chunk)
-            if isinstance(img, PngImagePlugin.PngImageFile):
-                # Adding metadata as text chunks
-                for key, value in text_metadata.items():
-                    img.text[key] = value
+        # Load existing IPTC data (if any)
+        iptc_data = iptcinfo3.IPTCInfo(image_path, force=True)
 
-            # Save the updated PNG with metadata
-            img.save(image_path)
-        else:
-            # For JPG/JPEG images, use iptcinfo3
-            iptc_data = iptcinfo3.IPTCInfo(image_path, force=True)
-            for tag in iptc_data._data:
-                iptc_data._data[tag] = []  # Clear existing metadata
+        # Clear existing IPTC metadata
+        for tag in iptc_data._data:
+            iptc_data._data[tag] = []
 
-            iptc_data['keywords'] = [metadata.get('Tags', '')]  # Keywords
-            iptc_data['caption/abstract'] = [metadata.get('Title', '')]  # Title
-            iptc_data.save()  # Save the image with updated metadata
+        # Update IPTC data with new metadata
+        iptc_data['keywords'] = [metadata.get('Tags', '')]  # Keywords
+        iptc_data['caption/abstract'] = [metadata.get('Title', '')]  # Title
+
+        # Save the image with the embedded metadata
+        iptc_data.save()
 
         # Update progress bar
         files_processed += 1
         progress_bar.progress(files_processed / total_files)
         progress_bar.text(f"Embedding metadata for image {files_processed}/{total_files}")
 
+        # Return the updated image path for further processing
         return image_path
 
     except Exception as e:
-        # Display error details
         st.error(f"An error occurred while embedding metadata: {e}")
         st.error(traceback.format_exc())  # Print detailed error traceback for debugging
 

@@ -63,11 +63,11 @@ def normalize_text(text, max_length=100):
 # Function to generate metadata for images using AI model
 def generate_metadata(model, img):
     caption = model.generate_content([
-        "Analyze the uploaded image then Generate a a specific, descriptive, and informative title and professional title for a microstock image, summarizing the main subject, setting, and key themes or concepts in the image. The title should be clear, engaging, and relevant to potential keywords for searches. The title should clearly describe the capture all relevant aspects of the image, including actions, objects, emotions, environment, and context. Make the result one line only.",
+        "Analyze the uploaded image and generate a clear, descriptive, and professional one-line title suitable for a microstock image. The title should summarize the main subject, setting, key themes, and concepts, incorporating potential keywords for searches. Ensure it captures all relevant aspects, including actions, objects, emotions, environment, and context.",
         img
     ])
     tags = model.generate_content([
-        "Analyze the uploaded image and generate a comprehensive list of 30-50 relevant and specific keywords that capture all aspects of the image, including actions, objects, emotions, environment, and context. The first 5 keywords must be the most relevant. Ensure each keyword is a single word and separated by commas, optimized for searchability and relevance.",
+        "Analyze the uploaded image and generate a comprehensive list of 45–50 relevant and specific keywords that encapsulate all aspects of the image, such as actions, objects, emotions, environment, and context. The first five keywords must be the most relevant. Ensure each keyword is a single word, separated by commas, and optimized for searchability and relevance.",
         img
     ])
 

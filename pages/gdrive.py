@@ -54,11 +54,11 @@ if 'api_key' not in st.session_state:
 if 'uploaded_file_id' not in st.session_state:
     st.session_state['uploaded_file_id'] = None
 
-# Function to normalize and clean text
-def normalize_text(text):
+def normalize_text(text, max_length=100):
     normalized = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
     cleaned = re.sub(r'[^a-zA-Z0-9_\-\s]', '', normalized).strip()
-    return cleaned
+    return cleaned[:max_length]  # Truncate to the specified max length
+
 
 # Function to generate metadata for images using AI model
 def generate_metadata(model, img):

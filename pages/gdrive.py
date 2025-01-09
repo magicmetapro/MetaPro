@@ -67,7 +67,7 @@ def generate_metadata(model, img):
         img
     ])
     tags = model.generate_content([
-        "Analyze the uploaded image and generate a comprehensive list of keywords that capture all relevant aspects of the image, including actions, objects, emotions, environment, and context. Ensure each keyword is a single word and separated by commas.",
+        "Analyze the uploaded image and generate a comprehensive list of 30-50 relevant and specific keywords that capture all aspects of the image, including actions, objects, emotions, environment, and context. The first 5 keywords must be the most relevant. Ensure each keyword is a single word and separated by commas, optimized for searchability and relevance.",
         img
     ])
 

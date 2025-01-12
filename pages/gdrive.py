@@ -11,7 +11,6 @@ import re
 import unicodedata
 from datetime import datetime, timedelta
 import pytz
-import json
 from menu import menu_with_redirect
 
 st.set_option("client.showSidebarNavigation", False)

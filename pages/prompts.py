@@ -175,7 +175,7 @@ def main():
                         st.success(f"Upload successful. Remaining uploads for today: {1000 - st.session_state['upload_count']['count']}")
 
                     genai.configure(api_key=api_key)  # Configure AI model with API key
-                    model = genai.GenerativeModel('gemini-pro-vision')
+                    model = genai.GenerativeModel('gemini-1.5-flash')
 
                     all_prompts = []  # To store all generated prompts
                     similar_prompts = []  # To store all generated similar prompts

@@ -150,7 +150,7 @@ def main():
         additional_text = st.text_input('Additional text for prompts', value='--ar 16:9')
 
         # Number of similar prompts to generate
-        num_similar_prompts = st.number_input('Enter the number of similar prompts to generate', min_value=1, max_value=10, value=4)
+        num_similar_prompts = st.number_input('Enter the number of similar prompts to generate', min_value=1, max_value=1000, value=4)
 
         # Upload image files
         uploaded_files = st.file_uploader('Upload Images (JPG, JPEG, PNG supported)', type=['jpg', 'jpeg', 'png'], accept_multiple_files=True, key="file_uploader")

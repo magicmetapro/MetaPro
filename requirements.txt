@@ -9,6 +9,7 @@ iptcinfo3
 tenacity
 cairosvg
 protobuf
+cairocffi
 google-auth
 google-auth-oauthlib
 google-auth-httplib2

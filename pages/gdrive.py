@@ -133,13 +133,25 @@ def main():
     if api_key:
         st.session_state['api_key'] = api_key
 
-    uploaded_files = st.file_uploader('Upload Images or SVGs', accept_multiple_files=True)
+uploaded_files = st.file_uploader(
+    'Upload Images or SVGs (Only JPG, PNG, and SVG Supported)', 
+    accept_multiple_files=True
+)
 
-    if uploaded_files:
-        valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', 'image/png', 'image/jpg', 'image/svg+xml']]
-        if not valid_files:
-            st.error("Only JPG, PNG, and SVG files are supported.")
-            return
+if uploaded_files:
+    # Define valid MIME types
+    valid_mime_types = ['image/jpeg', 'image/png', 'image/jpg', 'image/svg+xml']
+
+    # Filter valid files based on MIME type
+    valid_files = [file for file in uploaded_files if file.type in valid_mime_types]
+    invalid_files = [file for file in uploaded_files if file.type not in valid_mime_types]
+
+    if invalid_files:
+        st.error("Only JPG, PNG, and SVG files are supported.")
+
+    if valid_files:
+        st.success(f"Successfully uploaded {len(valid_files)} valid file(s).")
+
 
         if st.button("Process"):
             with st.spinner("Processing..."):

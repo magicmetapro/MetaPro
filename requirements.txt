@@ -4,6 +4,7 @@ Pillow
 svglib
 reportlab
 piexif
+cairosvg
 streamlit
 Pillow
 piexif

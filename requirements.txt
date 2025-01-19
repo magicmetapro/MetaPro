@@ -8,8 +8,6 @@ piexif
 cairosvg
 cairo
 pandas
-streamlit
-Pillow
 piexif
 iptcinfo3
 tenacity

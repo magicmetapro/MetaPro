@@ -1,8 +1,5 @@
 import streamlit as st
-from svglib.svglib import svg2rlg  # Correct import
 from wand.image import Image
-from reportlab.graphics.renderPM import drawToString
-from PIL import Image
 import io
 
 # Streamlit App
@@ -16,20 +13,13 @@ if uploaded_file is not None:
     svg_data = uploaded_file.read()
 
     try:
-        # Convert the SVG to a drawing object
-        drawing = svg2rlg(io.BytesIO(svg_data))
-        
-        # Convert the drawing to a PNG (in memory)
-        png_data = drawToString(drawing, fmt='PNG')
+        # Convert SVG to JPG using wand
+        with Image(file=io.BytesIO(svg_data)) as img:
+            img.format = 'jpg'  # Specify that the output format should be JPG
+            with io.BytesIO() as output:
+                img.save(file=output)  # Save the output as JPG in memory
+                jpg_data = output.getvalue()
 
-        # Open the PNG data using Pillow
-        image = Image.open(io.BytesIO(png_data))
-        
-        # Convert PNG to JPG
-        with io.BytesIO() as output:
-            image.convert("RGB").save(output, format="JPEG")
-            jpg_data = output.getvalue()
-        
         # Provide the download link for the JPG
         st.download_button(
             label="Download JPG",

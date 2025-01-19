@@ -6,6 +6,7 @@ import google.generativeai as genai
 import iptcinfo3
 import zipfile
 import time
+import csv
 import traceback
 import re
 import unicodedata
@@ -66,12 +67,12 @@ def extract_svg_content(svg_path):
         return None
 
 # Function to generate metadata for images or SVGs using AI model
-def generate_metadata(model, content):
-    caption = model.generate_content([
+def generate_metadata(model, content, filename):
+    caption = model.generate_content([  
         "Analyze the content and generate a clear, descriptive, and professional one-line title suitable for a microstock image or illustration.",
         content
     ])
-    tags = model.generate_content([
+    tags = model.generate_content([ 
         "Analyze the content and generate a comprehensive list of 45–50 relevant and specific keywords encapsulating all aspects of the content.",
         content
     ])
@@ -81,24 +82,29 @@ def generate_metadata(model, content):
     keywords = filtered_tags.split(',')[:49]  # Limit to 49 words
     trimmed_tags = ','.join(keywords)
 
-    return {
-        'Title': caption.text.strip(),
-        'Tags': trimmed_tags.strip()
-    }
+    # Creating metadata row
+    metadata_row = [
+        filename,
+        caption.text.strip(),
+        trimmed_tags.strip(),
+        3,  # Dummy category, you can adjust this as per your needs
+        'Haleeq Whitten, Ludovic Hillion, Morgan Greentstreet, Christine Manore'  # Example release names
+    ]
 
-# Function to zip processed files
-def zip_processed_files(file_paths):
+    return metadata_row
+
+# Function to save metadata to a CSV file
+def save_metadata_to_csv(metadata_rows):
+    csv_file_path = os.path.join(tempfile.gettempdir(), 'metadata.csv')
     try:
-        zip_file_path = os.path.join(tempfile.gettempdir(), 'processed_files.zip')
+        with open(csv_file_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Filename', 'Title', 'Keywords', 'Category', 'Release Names'])  # CSV header
+            writer.writerows(metadata_rows)  # Write metadata rows
 
-        with zipfile.ZipFile(zip_file_path, 'w') as zipf:
-            for file_path in file_paths:
-                zipf.write(file_path, arcname=os.path.basename(file_path))
-
-        return zip_file_path
-
+        return csv_file_path
     except Exception as e:
-        st.error(f"An error occurred while zipping files: {e}")
+        st.error(f"An error occurred while saving CSV: {e}")
         st.error(traceback.format_exc())
         return None
 
@@ -147,7 +153,7 @@ def main():
                     genai.configure(api_key=api_key)
                     model = genai.GenerativeModel('gemini-1.5-flash')
 
-                    processed_files = []
+                    metadata_rows = []
                     for file in valid_files:
                         temp_path = os.path.join(tempfile.gettempdir(), file.name)
                         with open(temp_path, 'wb') as f:
@@ -159,20 +165,16 @@ def main():
                             img = Image.open(temp_path)
                             content = f"An image with dimensions {img.size}"
 
-                        metadata = generate_metadata(model, content)
-                        normalized_title = normalize_text(metadata['Title'])
-                        new_file_path = os.path.join(tempfile.gettempdir(), f"{normalized_title}.txt")
-                        
-                        with open(new_file_path, 'w') as meta_file:
-                            meta_file.write(f"Title: {metadata['Title']}\n")
-                            meta_file.write(f"Keywords: {metadata['Tags']}\n")
+                        # Generate metadata
+                        metadata_row = generate_metadata(model, content, file.name)
+                        metadata_rows.append(metadata_row)
 
-                        processed_files.append(new_file_path)
+                    # Save metadata to CSV
+                    csv_path = save_metadata_to_csv(metadata_rows)
+                    if csv_path:
+                        with open(csv_path, 'rb') as csv_file:
+                            st.download_button("Download Metadata CSV", csv_file, "metadata.csv", "application/csv")
 
-                    zip_path = zip_processed_files(processed_files)
-                    if zip_path:
-                        with open(zip_path, 'rb') as zip_file:
-                            st.download_button("Download Processed Files", zip_file, "processed_files.zip", "application/zip")
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
                     st.error(traceback.format_exc())

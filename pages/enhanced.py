@@ -2,19 +2,18 @@ import streamlit as st
 import os
 import tempfile
 from PIL import Image
-import cairosvg
 import google.generativeai as genai
 import iptcinfo3
 import zipfile
 import time
 import traceback
 import re
-import csv
 import unicodedata
-import pandas as pd
 from datetime import datetime, timedelta
 import pytz
 from menu import menu_with_redirect
+from xml.etree import ElementTree as ET
+import csv
 
 st.set_option("client.showSidebarNavigation", False)
 
@@ -54,16 +53,18 @@ if 'api_key' not in st.session_state:
 def normalize_text(text, max_length=100):
     normalized = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
     cleaned = re.sub(r'[^a-zA-Z0-9_\-\s]', '', normalized).strip()
-    return cleaned[:max_length]
+    return cleaned[:max_length]  # Truncate to the specified max length
 
-# Function to process SVG files and convert to PNG
-def convert_svg_to_png(svg_path):
+# Function to extract content from SVG files
+def extract_svg_content(svg_path):
     try:
-        png_path = svg_path.rsplit('.', 1)[0] + '.png'
-        cairosvg.svg2png(url=svg_path, write_to=png_path)
-        return png_path
+        tree = ET.parse(svg_path)
+        root = tree.getroot()
+        text_elements = [elem.text for elem in root.iter() if elem.text]
+        return ' '.join(text_elements)
     except Exception as e:
-        raise Exception(f"Error converting SVG to PNG: {e}")
+        st.error(f"Failed to process SVG content: {e}")
+        return None
 
 # Function to generate metadata for images or SVGs using AI model
 def generate_metadata(model, content, filename):
@@ -104,6 +105,22 @@ def save_metadata_to_csv(metadata_rows):
         return csv_file_path
     except Exception as e:
         st.error(f"An error occurred while saving CSV: {e}")
+        st.error(traceback.format_exc())
+        return None
+
+# Function to zip processed files
+def zip_processed_files(file_paths):
+    try:
+        zip_file_path = os.path.join(tempfile.gettempdir(), 'processed_files.zip')
+
+        with zipfile.ZipFile(zip_file_path, 'w') as zipf:
+            for file_path in file_paths:
+                zipf.write(file_path, arcname=os.path.basename(file_path))
+
+        return zip_file_path
+
+    except Exception as e:
+        st.error(f"An error occurred while zipping files: {e}")
         st.error(traceback.format_exc())
         return None
 
@@ -153,6 +170,7 @@ def main():
                     model = genai.GenerativeModel('gemini-1.5-flash')
 
                     metadata_rows = []
+                    processed_files = []
                     for file in valid_files:
                         temp_path = os.path.join(tempfile.gettempdir(), file.name)
                         with open(temp_path, 'wb') as f:
@@ -168,11 +186,27 @@ def main():
                         metadata_row = generate_metadata(model, content, file.name)
                         metadata_rows.append(metadata_row)
 
+                        # Save metadata to a text file
+                        normalized_title = normalize_text(metadata_row[1])
+                        new_file_path = os.path.join(tempfile.gettempdir(), f"{normalized_title}.txt")
+                        
+                        with open(new_file_path, 'w') as meta_file:
+                            meta_file.write(f"Title: {metadata_row[1]}\n")
+                            meta_file.write(f"Keywords: {metadata_row[2]}\n")
+
+                        processed_files.append(new_file_path)
+
                     # Save metadata to CSV
                     csv_path = save_metadata_to_csv(metadata_rows)
                     if csv_path:
                         with open(csv_path, 'rb') as csv_file:
                             st.download_button("Download Metadata CSV", csv_file, "metadata.csv", "application/csv")
+
+                    # Zip processed files
+                    zip_path = zip_processed_files(processed_files)
+                    if zip_path:
+                        with open(zip_path, 'rb') as zip_file:
+                            st.download_button("Download Processed Files", zip_file, "processed_files.zip", "application/zip")
 
                 except Exception as e:
                     st.error(f"An error occurred: {e}")

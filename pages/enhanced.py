@@ -25,7 +25,7 @@ st.set_option("client.showSidebarNavigation", False)
 menu_with_redirect()
 
 # Apply custom styling
-st.markdown(\"\"\"
+st.markdown("""
     <style>
         #MainMenu, header, footer {
             visibility: hidden;
@@ -35,7 +35,8 @@ st.markdown(\"\"\"
             height: 10vh;
         }
     </style>
-    \"\"\", unsafe_allow_html=True)
+    """, unsafe_allow_html=True)
+
 
 # Set the timezone to UTC+7 Jakarta
 JAKARTA_TZ = pytz.timezone('Asia/Jakarta')

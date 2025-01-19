@@ -6,6 +6,7 @@ reportlab
 cairocffi
 piexif
 cairosvg
+cairo
 pandas
 streamlit
 Pillow

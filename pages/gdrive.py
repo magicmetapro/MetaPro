@@ -128,7 +128,7 @@ def convert_svg_to_jpeg(svg_path):
         png_path = svg_path.rsplit('.', 1)[0] + '.png'
         renderPM.drawToFile(drawing, png_path, fmt="PNG")
         # Convert the PNG to JPEG using Pillow
-        img = PILImage.open(png_path).convert('RGB')
+        img = Image.open(png_path).convert('RGB')
         jpeg_path = svg_path.rsplit('.', 1)[0] + '.jpg'
         img.save(jpeg_path, 'JPEG', quality=100)
         return jpeg_path

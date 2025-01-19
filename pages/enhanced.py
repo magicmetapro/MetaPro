@@ -1,32 +1,34 @@
 import streamlit as st
-from wand.image import Image
-import io
+from cairosvg import svg2png
+from io import BytesIO
 
-# Streamlit App
-st.title("SVG to JPG Converter")
+def main():
+    st.title("SVG to PNG Converter")
+    st.write("Upload an SVG file, and this tool will convert it to a PNG image.")
 
-# Upload SVG file
-uploaded_file = st.file_uploader("Choose an SVG file", type="svg")
+    # File uploader
+    uploaded_file = st.file_uploader("Upload SVG file", type=["svg"])
 
-if uploaded_file is not None:
-    # Read the SVG file
-    svg_data = uploaded_file.read()
+    if uploaded_file:
+        try:
+            # Convert SVG to PNG
+            svg_content = uploaded_file.read()
+            png_output = BytesIO()
+            svg2png(bytestring=svg_content, write_to=png_output)
 
-    try:
-        # Convert SVG to JPG using wand
-        with Image(file=io.BytesIO(svg_data)) as img:
-            img.format = 'jpg'  # Specify that the output format should be JPG
-            with io.BytesIO() as output:
-                img.save(file=output)  # Save the output as JPG in memory
-                jpg_data = output.getvalue()
+            # Display the PNG
+            st.image(png_output.getvalue(), format="PNG")
 
-        # Provide the download link for the JPG
-        st.download_button(
-            label="Download JPG",
-            data=jpg_data,
-            file_name="converted_image.jpg",
-            mime="image/jpeg"
-        )
-    
-    except Exception as e:
-        st.error(f"An error occurred while converting the SVG: {e}")
+            # Provide download link for the PNG file
+            st.download_button(
+                label="Download PNG",
+                data=png_output.getvalue(),
+                file_name="converted_image.png",
+                mime="image/png"
+            )
+
+        except Exception as e:
+            st.error(f"An error occurred during the conversion: {e}")
+
+if __name__ == "__main__":
+    main()

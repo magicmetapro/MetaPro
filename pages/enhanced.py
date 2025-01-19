@@ -1,5 +1,5 @@
 import streamlit as st
-from svglib.svgnose import svg2rlg
+from svglib.svglib import svg2rlg  # Correct import
 from reportlab.graphics.renderPM import drawToString
 from PIL import Image
 import io

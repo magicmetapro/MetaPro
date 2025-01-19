@@ -9,6 +9,7 @@ import zipfile
 import time
 import traceback
 import re
+import csv
 import unicodedata
 import pandas as pd
 from datetime import datetime, timedelta
@@ -64,87 +65,53 @@ def convert_svg_to_png(svg_path):
     except Exception as e:
         raise Exception(f"Error converting SVG to PNG: {e}")
 
-# Function to generate metadata for images using AI model
-def generate_metadata(model, img):
-    caption = model.generate_content([
-        "Analyze the uploaded image and generate a clear, descriptive, and professional one-line title suitable for a microstock image. The title should summarize the main subject, setting, key themes, and concepts, incorporating potential keywords for searches. Ensure it captures all relevant aspects, including actions, objects, emotions, environment, and context.",
-        img
+# Function to generate metadata for images or SVGs using AI model
+def generate_metadata(model, content, filename):
+    caption = model.generate_content([  
+        "Analyze the content and generate a clear, descriptive, and professional one-line title suitable for a microstock image or illustration.",
+        content
     ])
-    tags = model.generate_content([
-        "Analyze the uploaded image and generate a comprehensive list of 45–50 relevant and specific keywords that encapsulate all aspects of the image, such as actions, objects, emotions, environment, and context. The first five keywords must be the most relevant. Ensure each keyword is a single word, separated by commas, and optimized for searchability and relevance.",
-        img
+    tags = model.generate_content([ 
+        "Analyze the content and generate a comprehensive list of 45–50 relevant and specific keywords encapsulating all aspects of the content.",
+        content
     ])
 
+    # Filter out undesirable characters from the generated tags
     filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
-    keywords = filtered_tags.split(',')[:49]
+    keywords = filtered_tags.split(',')[:49]  # Limit to 49 words
     trimmed_tags = ','.join(keywords)
 
-    return {
-        'Title': caption.text.strip(),
-        'Tags': trimmed_tags.strip()
-    }
+    # Creating metadata row
+    metadata_row = [
+        filename,
+        caption.text.strip(),
+        trimmed_tags.strip(),
+        3,  # Dummy category, you can adjust this as per your needs
+        'Haleeq Whitten, Ludovic Hillion, Morgan Greentstreet, Christine Manore'  # Example release names
+    ]
 
-# Function to embed metadata into images and rename based on title
-def embed_metadata(image_path, metadata):
+    return metadata_row
+
+# Function to save metadata to a CSV file
+def save_metadata_to_csv(metadata_rows):
+    csv_file_path = os.path.join(tempfile.gettempdir(), 'metadata.csv')
     try:
-        time.sleep(1)
-        img = Image.open(image_path)
-        iptc_data = iptcinfo3.IPTCInfo(image_path, force=True)
-        for tag in iptc_data._data:
-            iptc_data._data[tag] = []
-        iptc_data['keywords'] = [metadata.get('Tags', '')]
-        iptc_data['caption/abstract'] = [metadata.get('Title', '')]
-        iptc_data.save()
+        with open(csv_file_path, mode='w', newline='') as file:
+            writer = csv.writer(file)
+            writer.writerow(['Filename', 'Title', 'Keywords', 'Category', 'Release Names'])  # CSV header
+            writer.writerows(metadata_rows)  # Write metadata rows
 
-        base_dir = os.path.dirname(image_path)
-        normalized_title = normalize_text(metadata['Title'])
-        new_image_path = os.path.join(base_dir, f"{normalized_title}.jpg")
-
-        counter = 1
-        while os.path.exists(new_image_path):
-            new_image_path = os.path.join(base_dir, f"{normalized_title}_{counter}.jpg")
-            counter += 1
-
-        os.rename(image_path, new_image_path)
-
-        return new_image_path
-
+        return csv_file_path
     except Exception as e:
-        st.error(f"An error occurred while embedding metadata: {e}")
-        st.error(traceback.format_exc())
-
-# Function to zip processed images
-def zip_processed_images(image_paths):
-    try:
-        zip_file_path = os.path.join(tempfile.gettempdir(), 'processed_images.zip')
-
-        with zipfile.ZipFile(zip_file_path, 'w') as zipf:
-            for image_path in image_paths:
-                zipf.write(image_path, arcname=os.path.basename(image_path))
-
-        return zip_file_path
-
-    except Exception as e:
-        st.error(f"An error occurred while zipping images: {e}")
+        st.error(f"An error occurred while saving CSV: {e}")
         st.error(traceback.format_exc())
         return None
 
-# Function to convert images to JPEG
-def convert_to_jpeg(image_path):
-    try:
-        img = Image.open(image_path)
-        if img.format != 'JPEG':
-            img = img.convert('RGB')
-            jpeg_image_path = image_path.rsplit('.', 1)[0] + '.jpg'
-            img.save(jpeg_image_path, 'JPEG', quality=100)
-            return jpeg_image_path
-        else:
-            return image_path
-    except Exception as e:
-        raise Exception(f"An error occurred while converting the image: {e}")
-
 # Main function
 def main():
+    """Main function for the Streamlit app."""
+
+    # Display WhatsApp chat link
     st.markdown("""
     <div style="text-align: center; margin-top: 20px;">
         <a href="https://wa.me/6282265298845" target="_blank">
@@ -155,87 +122,61 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    license_file = "license.txt"
     if not st.session_state['license_validated']:
-        if os.path.exists(license_file):
-            with open(license_file, 'r') as file:
-                start_date_str = file.read().strip()
-                start_date = datetime.fromisoformat(start_date_str)
-                st.session_state['license_validated'] = True
-        else:
-            validation_key = st.text_input('License Key', type='password')
+        validation_key = st.text_input('License Key', type='password')
+        correct_key = "a"
 
-    correct_key = "a"
-    if not st.session_state['license_validated'] and validation_key:
-        if validation_key == correct_key:
+        if validation_key and validation_key == correct_key:
             st.session_state['license_validated'] = True
-            start_date = datetime.now(JAKARTA_TZ)
-            with open(license_file, 'w') as file:
-                file.write(start_date.isoformat())
-        else:
-            st.error("Invalid validation key. Please enter the correct key.")
+            st.success("License validated successfully!")
+        elif validation_key:
+            st.error("Invalid validation key. Please try again.")
+        return
 
-    if st.session_state['license_validated']:
-        with open(license_file, 'r') as file:
-            start_date_str = file.read().strip()
-            start_date = datetime.fromisoformat(start_date_str)
+    api_key = st.text_input('Enter your [API](https://makersuite.google.com/app/apikey) Key', value=st.session_state.get('api_key', ''))
 
-        expiration_date = start_date + timedelta(days=91)
-        current_date = datetime.now(JAKARTA_TZ)
+    if api_key:
+        st.session_state['api_key'] = api_key
 
-        if current_date > expiration_date:
-            st.error("Your license has expired. Please contact support for a new license key.")
+    uploaded_files = st.file_uploader('Upload Images or SVGs', accept_multiple_files=True)
+
+    if uploaded_files:
+        valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', 'image/png', 'image/jpg', 'image/svg+xml']]
+        if not valid_files:
+            st.error("Only JPG, PNG, and SVG files are supported.")
             return
-        else:
-            days_remaining = (expiration_date - current_date).days
-            st.success(f"License valid. You have {days_remaining} days remaining. Max 45 files per upload, unlimited daily uploads.")
 
-        api_key = st.text_input('Enter your [API](https://makersuite.google.com/app/apikey) Key', value=st.session_state['api_key'] or '')
-        if api_key:
-            st.session_state['api_key'] = api_key
+        if st.button("Process"):
+            with st.spinner("Processing..."):
+                try:
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel('gemini-1.5-flash')
 
-        uploaded_files = st.file_uploader('Upload Images (JPG, PNG, SVG)', accept_multiple_files=True)
+                    metadata_rows = []
+                    for file in valid_files:
+                        temp_path = os.path.join(tempfile.gettempdir(), file.name)
+                        with open(temp_path, 'wb') as f:
+                            f.write(file.read())
 
-        if uploaded_files:
-            valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', 'image/png', 'image/svg+xml']]
-            if not valid_files:
-                st.error("Only JPG, PNG, and SVG files are supported.")
+                        if file.type == 'image/svg+xml':
+                            content = extract_svg_content(temp_path)
+                        else:
+                            img = Image.open(temp_path)
+                            content = f"An image with dimensions {img.size}"
 
-            if valid_files and st.button("Process"):
-                with st.spinner("Processing..."):
-                    try:
-                        genai.configure(api_key=api_key)
-                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        # Generate metadata
+                        metadata_row = generate_metadata(model, content, file.name)
+                        metadata_rows.append(metadata_row)
 
-                        with tempfile.TemporaryDirectory() as temp_dir:
-                            image_paths = []
-                            metadata_list = []
-                            for file in valid_files:
-                                temp_file_path = os.path.join(temp_dir, file.name)
-                                with open(temp_file_path, 'wb') as f:
-                                    f.write(file.read())
+                    # Save metadata to CSV
+                    csv_path = save_metadata_to_csv(metadata_rows)
+                    if csv_path:
+                        with open(csv_path, 'rb') as csv_file:
+                            st.download_button("Download Metadata CSV", csv_file, "metadata.csv", "application/csv")
 
-                                if file.type == 'image/svg+xml':
-                                    temp_file_path = convert_svg_to_png(temp_file_path)
-
-                                jpeg_image_path = convert_to_jpeg(temp_file_path)
-                                image_paths.append(jpeg_image_path)
-
-                                img = Image.open(jpeg_image_path)
-                                metadata = generate_metadata(model, img)
-                                metadata_list.append(metadata)
-
-                            csv_file_path = os.path.join(temp_dir, "metadata.csv")
-                            df = pd.DataFrame(metadata_list)
-                            df.to_csv(csv_file_path, index=False)
-
-                            st.success("Processing complete. Download your metadata below:")
-                            with open(csv_file_path, 'rb') as csv_file:
-                                st.download_button("Download Metadata CSV", csv_file, "metadata.csv", mime="text/csv")
-
-                    except Exception as e:
-                        st.error(f"An error occurred: {e}")
-                        st.error(traceback.format_exc())
+                except Exception as e:
+                    st.error(f"An error occurred: {e}")
+                    st.error(traceback.format_exc())
 
 if __name__ == '__main__':
     main()

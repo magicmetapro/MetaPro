@@ -88,6 +88,18 @@ def write_metadata_to_csv(metadata_list, output_path):
         st.error(f"An error occurred while writing to CSV: {e}")
         st.error(traceback.format_exc())
 
+# Function to write metadata to TXT
+def write_metadata_to_txt(metadata_list, output_path):
+    try:
+        with open(output_path, 'w') as file:
+            for metadata in metadata_list:
+                file.write(f"Title: {metadata['Title']}\n")
+                file.write(f"Tags: {metadata['Tags']}\n\n")
+        st.success(f"Metadata saved to {output_path}")
+    except Exception as e:
+        st.error(f"An error occurred while writing to TXT: {e}")
+        st.error(traceback.format_exc())
+
 # Main function
 def main():
     """Main function for the Streamlit app."""
@@ -210,13 +222,25 @@ def main():
                             output_csv_path = os.path.join(temp_dir, 'metadata.csv')
                             write_metadata_to_csv(metadata_list, output_csv_path)
 
-                            # Provide download button for the CSV
+                            # Write metadata to TXT
+                            output_txt_path = os.path.join(temp_dir, 'metadata.txt')
+                            write_metadata_to_txt(metadata_list, output_txt_path)
+
+                            # Provide download buttons for the CSV and TXT
                             with open(output_csv_path, 'rb') as csv_file:
                                 st.download_button(
                                     label="Download Metadata CSV",
                                     data=csv_file,
                                     file_name="metadata.csv",
                                     mime="text/csv"
+                                )
+
+                            with open(output_txt_path, 'rb') as txt_file:
+                                st.download_button(
+                                    label="Download Metadata TXT",
+                                    data=txt_file,
+                                    file_name="metadata.txt",
+                                    mime="text/plain"
                                 )
 
                     except Exception as e:

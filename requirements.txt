@@ -6,7 +6,6 @@ reportlab
 cairocffi
 piexif
 cairosvg
-cairo
 pandas
 piexif
 iptcinfo3

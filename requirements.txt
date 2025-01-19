@@ -3,6 +3,7 @@ streamlit
 Pillow
 svglib
 reportlab
+cairocffi
 piexif
 cairosvg
 streamlit

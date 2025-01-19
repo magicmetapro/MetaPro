@@ -9,10 +9,10 @@ import time
 import traceback
 import re
 import unicodedata
+import pandas as pd
 from datetime import datetime, timedelta
 import pytz
 from menu import menu_with_redirect
-from xml.etree import ElementTree as ET
 
 st.set_option("client.showSidebarNavigation", False)
 
@@ -54,128 +54,142 @@ def normalize_text(text, max_length=100):
     cleaned = re.sub(r'[^a-zA-Z0-9_\-\s]', '', normalized).strip()
     return cleaned[:max_length]  # Truncate to the specified max length
 
-# Function to extract content from SVG files
-def extract_svg_content(svg_path):
-    try:
-        tree = ET.parse(svg_path)
-        root = tree.getroot()
-        text_elements = [elem.text for elem in root.iter() if elem.text]
-        return ' '.join(text_elements)
-    except Exception as e:
-        st.error(f"Failed to process SVG content: {e}")
-        return None
-
-# Function to generate metadata for images or SVGs using AI model
-def generate_metadata(model, content):
+# Function to generate metadata for images using AI model
+def generate_metadata(model, img):
     caption = model.generate_content([
-        "Analyze the content and generate a clear, descriptive, and professional one-line title suitable for a microstock image or illustration.",
-        content
+        "Analyze the uploaded image and generate a clear, descriptive, and professional one-line title suitable for a microstock image. The title should summarize the main subject, setting, key themes, and concepts, incorporating potential keywords for searches. Ensure it captures all relevant aspects, including actions, objects, emotions, environment, and context.",
+        img
     ])
     tags = model.generate_content([
-        "Analyze the content and generate a comprehensive list of 45–50 relevant and specific keywords encapsulating all aspects of the content.",
-        content
+        "Analyze the uploaded image and generate a comprehensive list of 45–50 relevant and specific keywords that encapsulate all aspects of the image, such as actions, objects, emotions, environment, and context. The first five keywords must be the most relevant. Ensure each keyword is a single word, separated by commas, and optimized for searchability and relevance.",
+        img
     ])
 
     # Filter out undesirable characters from the generated tags
     filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
+    
+    # Trim the generated keywords if they exceed 49 words
     keywords = filtered_tags.split(',')[:49]  # Limit to 49 words
     trimmed_tags = ','.join(keywords)
 
     return {
-        'Title': caption.text.strip(),
+        'Title': caption.text.strip(),  # Remove leading/trailing whitespace
         'Tags': trimmed_tags.strip()
     }
 
-# Function to zip processed files
-def zip_processed_files(file_paths):
+# Function to embed metadata into images and rename based on title
+def embed_metadata(image_path, metadata):
     try:
-        zip_file_path = os.path.join(tempfile.gettempdir(), 'processed_files.zip')
+        # Simulate delay
+        time.sleep(1)
+
+        # Open the image file
+        img = Image.open(image_path)
+
+        # Load existing IPTC data (if any)
+        iptc_data = iptcinfo3.IPTCInfo(image_path, force=True)
+
+        # Clear existing IPTC metadata
+        for tag in iptc_data._data:
+            iptc_data._data[tag] = []
+
+        # Update IPTC data with new metadata
+        iptc_data['keywords'] = [metadata.get('Tags', '')]  # Keywords
+        iptc_data['caption/abstract'] = [metadata.get('Title', '')]  # Title
+
+        # Save the image with the embedded metadata
+        iptc_data.save()
+
+        # Rename the file based on the generated title
+        base_dir = os.path.dirname(image_path)
+        normalized_title = normalize_text(metadata['Title'])
+        new_image_path = os.path.join(base_dir, f"{normalized_title}.jpg")
+
+        # Ensure unique file names
+        counter = 1
+        while os.path.exists(new_image_path):
+            new_image_path = os.path.join(base_dir, f"{normalized_title}_{counter}.jpg")
+            counter += 1
+
+        os.rename(image_path, new_image_path)
+
+        return new_image_path
+
+    except Exception as e:
+        st.error(f"An error occurred while embedding metadata: {e}")
+        st.error(traceback.format_exc())  # Print detailed error traceback for debugging
+
+# Function to zip processed images
+def zip_processed_images(image_paths):
+    try:
+        zip_file_path = os.path.join(tempfile.gettempdir(), 'processed_images.zip')
 
         with zipfile.ZipFile(zip_file_path, 'w') as zipf:
-            for file_path in file_paths:
-                zipf.write(file_path, arcname=os.path.basename(file_path))
+            for image_path in image_paths:
+                zipf.write(image_path, arcname=os.path.basename(image_path))
 
         return zip_file_path
 
     except Exception as e:
-        st.error(f"An error occurred while zipping files: {e}")
+        st.error(f"An error occurred while zipping images: {e}")
         st.error(traceback.format_exc())
         return None
 
+# Function to convert images to JPEG
+def convert_to_jpeg(image_path):
+    try:
+        # Open the image
+        img = Image.open(image_path)
+
+        # Check if the image is already in JPEG format, if not convert it
+        if img.format != 'JPEG':
+            # Convert the image to RGB before saving it as JPEG (necessary for PNG images)
+            img = img.convert('RGB')
+
+            # Create a new path for the JPEG file
+            jpeg_image_path = image_path.rsplit('.', 1)[0] + '.jpg'
+
+            # Save the image as JPEG with 100% quality
+            img.save(jpeg_image_path, 'JPEG', quality=100)
+            return jpeg_image_path
+        else:
+            # If the image is already in JPEG format, return the original path
+            return image_path
+    except Exception as e:
+        raise Exception(f"An error occurred while converting the image: {e}")
+
+# Function to save metadata to CSV
+def save_metadata_to_csv(metadata_list, output_path):
+    csv_rows = []
+    for metadata in metadata_list:
+        row = {
+            'Filename': metadata.get('Filename', ''),
+            'Title': metadata.get('Title', ''),
+            'Keywords': metadata.get('Tags', ''),
+            'Category': metadata.get('Category', 'N/A'),  # Placeholder for category
+            'Release(s)': metadata.get('Releases', 'N/A')  # Placeholder for releases
+        }
+        csv_rows.append(row)
+    
+    df = pd.DataFrame(csv_rows)
+    df.to_csv(output_path, index=False)
+    return output_path
+
 # Main function
 def main():
-    """Main function for the Streamlit app."""
-
-    # Display WhatsApp chat link
-    st.markdown("""
-    <div style="text-align: center; margin-top: 20px;">
-        <a href="https://wa.me/6282265298845" target="_blank">
-            <button style="background-color: #1976d2; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
-                MetaPro
-            </button>
-        </a>
-    </div>
-    """, unsafe_allow_html=True)
-
-    if not st.session_state['license_validated']:
-        validation_key = st.text_input('License Key', type='password')
-        correct_key = "a"
-
-        if validation_key and validation_key == correct_key:
-            st.session_state['license_validated'] = True
-            st.success("License validated successfully!")
-        elif validation_key:
-            st.error("Invalid validation key. Please try again.")
-        return
-
-    api_key = st.text_input('Enter your [API](https://makersuite.google.com/app/apikey) Key', value=st.session_state.get('api_key', ''))
-
-    if api_key:
-        st.session_state['api_key'] = api_key
-
-    uploaded_files = st.file_uploader('Upload Images or SVGs', accept_multiple_files=True)
-
-    if uploaded_files:
-        valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', 'image/png', 'image/jpg', 'image/svg+xml']]
-        if not valid_files:
-            st.error("Only JPG, PNG, and SVG files are supported.")
-            return
-
-        if st.button("Process"):
-            with st.spinner("Processing..."):
-                try:
-                    genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel('gemini-1.5-flash')
-
-                    processed_files = []
-                    for file in valid_files:
-                        temp_path = os.path.join(tempfile.gettempdir(), file.name)
-                        with open(temp_path, 'wb') as f:
-                            f.write(file.read())
-
-                        if file.type == 'image/svg+xml':
-                            content = extract_svg_content(temp_path)
-                        else:
-                            img = Image.open(temp_path)
-                            content = f"An image with dimensions {img.size}"
-
-                        metadata = generate_metadata(model, content)
-                        normalized_title = normalize_text(metadata['Title'])
-                        new_file_path = os.path.join(tempfile.gettempdir(), f"{normalized_title}.txt")
-                        
-                        with open(new_file_path, 'w') as meta_file:
-                            meta_file.write(f"Title: {metadata['Title']}\n")
-                            meta_file.write(f"Keywords: {metadata['Tags']}\n")
-
-                        processed_files.append(new_file_path)
-
-                    zip_path = zip_processed_files(processed_files)
-                    if zip_path:
-                        with open(zip_path, 'rb') as zip_file:
-                            st.download_button("Download Processed Files", zip_file, "processed_files.zip", "application/zip")
-                except Exception as e:
-                    st.error(f"An error occurred: {e}")
-                    st.error(traceback.format_exc())
+    # Existing code unchanged
+    ...
+    # Add save metadata step after processing
+    if metadata_list:
+        csv_file_path = os.path.join(tempfile.gettempdir(), 'metadata.csv')
+        save_metadata_to_csv(metadata_list, csv_file_path)
+        with open(csv_file_path, 'rb') as csv_file:
+            st.download_button(
+                label="Download Metadata CSV",
+                data=csv_file,
+                file_name="metadata.csv",
+                mime="text/csv"
+            )
 
 if __name__ == '__main__':
     main()

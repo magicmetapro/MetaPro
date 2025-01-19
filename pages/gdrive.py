@@ -12,7 +12,6 @@ import unicodedata
 from datetime import datetime, timedelta
 import pytz
 from menu import menu_with_redirect
-import xml.etree.ElementTree as ET
 
 st.set_option("client.showSidebarNavigation", False)
 
@@ -80,9 +79,6 @@ def generate_metadata(model, img):
 # Function to embed metadata into images and rename based on title
 def embed_metadata(image_path, metadata):
     try:
-        if image_path.endswith('.svg'):
-            return embed_metadata_svg(image_path, metadata)
-
         # Simulate delay
         time.sleep(1)
 
@@ -121,42 +117,6 @@ def embed_metadata(image_path, metadata):
     except Exception as e:
         st.error(f"An error occurred while embedding metadata: {e}")
         st.error(traceback.format_exc())  # Print detailed error traceback for debugging
-
-# Function to embed metadata into SVG
-def embed_metadata_svg(svg_path, metadata):
-    try:
-        # Parse the SVG file
-        tree = ET.parse(svg_path)
-        root = tree.getroot()
-        ET.register_namespace("", "http://www.w3.org/2000/svg")
-        
-        # Find or create <metadata> tag
-        metadata_element = root.find('{http://www.w3.org/2000/svg}metadata')
-        if metadata_element is None:
-            metadata_element = ET.SubElement(root, 'metadata')
-        
-        # Clear existing metadata
-        metadata_element.clear()
-        
-        # Add title as a direct child of <metadata>
-        title_element = ET.SubElement(metadata_element, 'title')
-        title_element.text = metadata.get('Title', '')
-
-        # Add keywords as a custom child
-        keywords_element = ET.SubElement(metadata_element, 'keywords')
-        keywords_element.text = metadata.get('Tags', '')
-
-        # Save the updated SVG to a new file
-        new_svg_path = svg_path.rsplit('.', 1)[0] + '_updated.svg'
-        tree.write(new_svg_path, encoding='utf-8', xml_declaration=True)
-        
-        return new_svg_path
-
-    except Exception as e:
-        st.error(f"An error occurred while embedding metadata into SVG: {e}")
-        st.error(traceback.format_exc())
-        return None
-
 
 # Function to zip processed images
 def zip_processed_images(image_paths):
@@ -261,65 +221,89 @@ def main():
             st.session_state['api_key'] = api_key
 
         # Upload image files
-        uploaded_files = st.file_uploader('Upload Images (Only JPG, PNG, JPEG, and SVG Supported)', accept_multiple_files=True)
+        uploaded_files = st.file_uploader('Upload Images (Only JPG, PNG and JPEG Supported)', accept_multiple_files=True)
 
         if uploaded_files:
-            valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', 'image/png', 'image/svg+xml']]
-            if not valid_files:
-                st.error("No valid files uploaded. Please upload JPG, PNG, JPEG, or SVG files.")
+            valid_files = [file for file in uploaded_files if file.type in ['image/jpeg', 'image/png', 'image/jpg']]
+            invalid_files = [file for file in uploaded_files if file not in valid_files]
 
-            if st.button("Process"):
-                if api_key:
-                    genai.configure(api_key=api_key)
-                    model = genai.GenerativeModel('gemini-1.5-flash')
-                    with st.spinner("Processing..."):
-                        try:
-                            # Check daily upload count
-                            upload_date = st.session_state['upload_count']['date']
-                            upload_count = st.session_state['upload_count']['count']
+            if invalid_files:
+                st.error("Only JPG and JPEG files are supported.")
 
-                            if upload_date != datetime.now(JAKARTA_TZ).date():
-                                upload_count = 0
-                                upload_date = datetime.now(JAKARTA_TZ).date()
+            if valid_files and st.button("Process"):
+                with st.spinner("Processing..."):
+                    try:
+                        # Check and update upload count for the current date
+                        if st.session_state['upload_count']['date'] != current_date.date():
+                            st.session_state['upload_count'] = {
+                                'date': current_date.date(),
+                                'count': 0
+                            }
+                        
+                        # Check if remaining uploads are available
+                        if st.session_state['upload_count']['count'] + len(valid_files) > 1000000:
+                            remaining_uploads = 1000000 - st.session_state['upload_count']['count']
+                            st.warning(f"You have exceeded the upload limit. Remaining uploads for today: {remaining_uploads}")
+                            return
+                        else:
+                            st.session_state['upload_count']['count'] += len(valid_files)
+                            st.success(f"Uploads successful. Remaining uploads for today: {1000000 - st.session_state['upload_count']['count']}")
 
-                            if upload_count + len(valid_files) > 45:
-                                st.error("Daily upload limit exceeded. Please try again tomorrow.")
-                                return
+                        genai.configure(api_key=api_key)  # Configure AI model with API key
+                        model = genai.GenerativeModel('gemini-1.5-flash')
 
-                            temp_dir = tempfile.mkdtemp()
-                            processed_images = []
+                        # Create a temporary directory to store the uploaded images
+                        with tempfile.TemporaryDirectory() as temp_dir:
+                            # Save the uploaded images to the temporary directory
+                            image_paths = []
                             for file in valid_files:
-                                file_path = os.path.join(temp_dir, file.name)
-                                with open(file_path, 'wb') as f:
+                                temp_image_path = os.path.join(temp_dir, file.name)
+                                with open(temp_image_path, 'wb') as f:
                                     f.write(file.read())
+                                
+                                # Convert to JPEG if needed
+                                jpeg_image_path = convert_to_jpeg(temp_image_path)
 
-                                if file.type == 'image/svg+xml':
-                                    metadata = generate_metadata(model, file_path)
-                                    processed_path = embed_metadata_svg(file_path, metadata)
-                                else:
-                                    jpeg_path = convert_to_jpeg(file_path)
-                                    metadata = generate_metadata(model, jpeg_path)
-                                    processed_path = embed_metadata(jpeg_path, metadata)
+                                # Append the path of the converted (or original JPEG) image
+                                image_paths.append(jpeg_image_path)
 
-                                if processed_path:
-                                    processed_images.append(processed_path)
+                            # Process each image and generate titles and tags using AI
+                            metadata_list = []
+                            process_placeholder = st.empty()
+                            for i, image_path in enumerate(image_paths):
+                                process_placeholder.text(f"Processing Generate Titles and Tags {i + 1}/{len(image_paths)}")
+                                try:
+                                    img = Image.open(image_path)
+                                    metadata = generate_metadata(model, img)
+                                    metadata_list.append(metadata)
+                                except Exception as e:
+                                    st.error(f"An error occurred while generating metadata for {os.path.basename(image_path)}: {e}")
+                                    st.error(traceback.format_exc())
+                                    continue
 
-                            if processed_images:
-                                # Update session state
-                                st.session_state['upload_count']['date'] = upload_date
-                                st.session_state['upload_count']['count'] = upload_count + len(valid_files)
+                            # Embed metadata into images
+                            processed_image_paths = []
+                            for image_path, metadata in zip(image_paths, metadata_list):
+                                updated_image_path = embed_metadata(image_path, metadata)
+                                if updated_image_path:
+                                    processed_image_paths.append(updated_image_path)
 
-                                # Zip the processed images
-                                zip_path = zip_processed_images(processed_images)
-                                with open(zip_path, 'rb') as f:
-                                    st.download_button("Download Processed Images", f, file_name="processed_images.zip")
-                            else:
-                                st.error("No images were processed.")
-                        except Exception as e:
-                            st.error("An error occurred during processing. Please try again.")
-                            st.error(traceback.format_exc())
-                else:
-                    st.error("API Key is required.")
+                            # Zip processed images
+                            zip_file_path = zip_processed_images(processed_image_paths)
+
+                            if zip_file_path:
+                                st.success("Processing complete. Download your files below:")
+                                with open(zip_file_path, 'rb') as zip_file:
+                                    st.download_button(
+                                        label="Download Processed Images",
+                                        data=zip_file,
+                                        file_name="processed_images.zip",
+                                        mime="application/zip"
+                                    )
+
+                    except Exception as e:
+                        st.error(f"An error occurred: {e}")
+                        st.error(traceback.format_exc())  # Print detailed error traceback for debugging
 
 if __name__ == '__main__':
     main()

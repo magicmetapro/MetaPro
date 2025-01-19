@@ -11,6 +11,8 @@ from datetime import datetime, timedelta
 import pytz
 import csv
 from menu import menu_with_redirect
+from cairosvg import svg2png
+from PIL import Image
 
 st.set_option("client.showSidebarNavigation", False)
 
@@ -87,6 +89,18 @@ def write_metadata_to_csv(metadata_list, output_path):
     except Exception as e:
         st.error(f"An error occurred while writing to CSV: {e}")
         st.error(traceback.format_exc())
+
+# Function to convert SVG to PNG
+def convert_svg_to_png(svg_file):
+    try:
+        temp_png_path = tempfile.mktemp(suffix='.png')
+        with open(temp_png_path, 'wb') as output:
+            svg2png(file_obj=svg_file, write_to=output)
+        return temp_png_path
+    except Exception as e:
+        st.error(f"An error occurred while converting SVG to PNG: {e}")
+        st.error(traceback.format_exc())
+        return None
 
 # Main function
 def main():
@@ -188,12 +202,12 @@ def main():
                             # Save the uploaded files to the temporary directory
                             image_paths = []
                             for file in valid_files:
-                                temp_image_path = os.path.join(temp_dir, file.name)
-                                with open(temp_image_path, 'wb') as f:
-                                    f.write(file.read())
-                                image_paths.append(temp_image_path)
+                                # Convert SVG to PNG
+                                temp_png_path = convert_svg_to_png(file)
+                                if temp_png_path:
+                                    image_paths.append(temp_png_path)
 
-                            # Process each SVG and generate titles and tags using AI
+                            # Process each PNG and generate titles and tags using AI
                             metadata_list = []
                             process_placeholder = st.empty()
                             for i, image_path in enumerate(image_paths):

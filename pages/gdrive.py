@@ -125,34 +125,38 @@ def embed_metadata(image_path, metadata):
 # Function to embed metadata into SVG
 def embed_metadata_svg(svg_path, metadata):
     try:
+        # Parse the SVG file
         tree = ET.parse(svg_path)
         root = tree.getroot()
         ET.register_namespace("", "http://www.w3.org/2000/svg")
-
-        # Locate or create <metadata> tag
+        
+        # Find or create <metadata> tag
         metadata_element = root.find('{http://www.w3.org/2000/svg}metadata')
         if metadata_element is None:
             metadata_element = ET.SubElement(root, 'metadata')
-
+        
         # Clear existing metadata
         metadata_element.clear()
+        
+        # Add title as a direct child of <metadata>
+        title_element = ET.SubElement(metadata_element, 'title')
+        title_element.text = metadata.get('Title', '')
 
-        # Add title and keywords
-        title = ET.SubElement(metadata_element, 'title')
-        title.text = metadata.get('Title', '')
-        keywords = ET.SubElement(metadata_element, 'keywords')
-        keywords.text = metadata.get('Tags', '')
+        # Add keywords as a custom child
+        keywords_element = ET.SubElement(metadata_element, 'keywords')
+        keywords_element.text = metadata.get('Tags', '')
 
-        # Save updated SVG
+        # Save the updated SVG to a new file
         new_svg_path = svg_path.rsplit('.', 1)[0] + '_updated.svg'
         tree.write(new_svg_path, encoding='utf-8', xml_declaration=True)
-
+        
         return new_svg_path
 
     except Exception as e:
         st.error(f"An error occurred while embedding metadata into SVG: {e}")
         st.error(traceback.format_exc())
         return None
+
 
 # Function to zip processed images
 def zip_processed_images(image_paths):

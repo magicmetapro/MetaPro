@@ -1,15 +1,14 @@
 import streamlit as st
 import os
 import tempfile
+import cairosvg
+from PIL import Image
 import google.generativeai as genai
-import zipfile
-import time
-import traceback
 import re
+import traceback
 import unicodedata
 from datetime import datetime, timedelta
 import pytz
-import csv
 from menu import menu_with_redirect
 
 st.set_option("client.showSidebarNavigation", False)
@@ -37,12 +36,6 @@ JAKARTA_TZ = pytz.timezone('Asia/Jakarta')
 if 'license_validated' not in st.session_state:
     st.session_state['license_validated'] = False
 
-if 'upload_count' not in st.session_state:
-    st.session_state['upload_count'] = {
-        'date': None,
-        'count': 0
-    }
-
 if 'api_key' not in st.session_state:
     st.session_state['api_key'] = None
 
@@ -52,21 +45,26 @@ def normalize_text(text, max_length=100):
     cleaned = re.sub(r'[^a-zA-Z0-9_\-\s]', '', normalized).strip()
     return cleaned[:max_length]  # Truncate to the specified max length
 
-# Function to generate metadata for images using AI model
-def generate_metadata(model, img):
+# Function to convert SVG to PNG
+def convert_svg_to_png(svg_file_path):
+    output_png_path = tempfile.mktemp(suffix=".png")  # Create a temporary PNG file path
+    cairosvg.svg2png(url=svg_file_path, write_to=output_png_path)  # Convert SVG to PNG
+    return output_png_path
+
+# Function to generate metadata (title and keywords)
+def generate_metadata(model, img_path):
     caption = model.generate_content([
         "Analyze the uploaded image and generate a clear, descriptive, and professional one-line title suitable for a microstock image. The title should summarize the main subject, setting, key themes, and concepts, incorporating potential keywords for searches. Ensure it captures all relevant aspects, including actions, objects, emotions, environment, and context.",
-        img
+        img_path
     ])
     tags = model.generate_content([
         "Analyze the uploaded image and generate a comprehensive list of 45–50 relevant and specific keywords that encapsulate all aspects of the image, such as actions, objects, emotions, environment, and context. The first five keywords must be the most relevant. Ensure each keyword is a single word, separated by commas, and optimized for searchability and relevance.",
-        img
+        img_path
     ])
 
     # Filter out undesirable characters from the generated tags
     filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
-    
-    # Trim the generated keywords if they exceed 49 words
+    # Limit the generated keywords to 49 words
     keywords = filtered_tags.split(',')[:49]  # Limit to 49 words
     trimmed_tags = ','.join(keywords)
 
@@ -75,36 +73,26 @@ def generate_metadata(model, img):
         'Tags': trimmed_tags.strip()
     }
 
-# Function to write metadata to CSV
+# Write metadata to CSV
 def write_metadata_to_csv(metadata_list, output_path):
-    try:
-        with open(output_path, mode='w', newline='') as file:
-            writer = csv.DictWriter(file, fieldnames=['Title', 'Tags'])
-            writer.writeheader()
-            for metadata in metadata_list:
-                writer.writerow(metadata)
-        st.success(f"Metadata saved to {output_path}")
-    except Exception as e:
-        st.error(f"An error occurred while writing to CSV: {e}")
-        st.error(traceback.format_exc())
+    import csv
+    with open(output_path, 'w', newline='', encoding='utf-8') as file:
+        writer = csv.DictWriter(file, fieldnames=['Title', 'Tags'])
+        writer.writeheader()
+        for data in metadata_list:
+            writer.writerow(data)
 
-# Function to write metadata to TXT
+# Write metadata to TXT
 def write_metadata_to_txt(metadata_list, output_path):
-    try:
-        with open(output_path, 'w') as file:
-            for metadata in metadata_list:
-                file.write(f"Title: {metadata['Title']}\n")
-                file.write(f"Tags: {metadata['Tags']}\n\n")
-        st.success(f"Metadata saved to {output_path}")
-    except Exception as e:
-        st.error(f"An error occurred while writing to TXT: {e}")
-        st.error(traceback.format_exc())
+    with open(output_path, 'w', encoding='utf-8') as file:
+        for data in metadata_list:
+            file.write(f"Title: {data['Title']}\n")
+            file.write(f"Tags: {data['Tags']}\n")
+            file.write("\n" + "-"*30 + "\n")
 
 # Main function
 def main():
     """Main function for the Streamlit app."""
-
-    # Display WhatsApp chat link
     st.markdown("""
     <div style="text-align: center; margin-top: 20px;">
         <a href="https://wa.me/6282265298845" target="_blank">
@@ -115,144 +103,74 @@ def main():
     </div>
     """, unsafe_allow_html=True)
 
-    # Check if license has already been validated
-    license_file = "license.txt"
-    if not st.session_state['license_validated']:
-        if os.path.exists(license_file):
-            with open(license_file, 'r') as file:
-                start_date_str = file.read().strip()
-                start_date = datetime.fromisoformat(start_date_str)
-                st.session_state['license_validated'] = True
-        else:
-            # License key input
-            validation_key = st.text_input('License Key', type='password')
+    # License validation and API key input
+    api_key = st.text_input('Enter your [API](https://makersuite.google.com/app/apikey) Key', value=st.session_state['api_key'] or '')
 
-    # Check if validation key is correct
-    correct_key = "a"
+    # Save API key in session state
+    if api_key:
+        st.session_state['api_key'] = api_key
 
-    if not st.session_state['license_validated'] and validation_key:
-        if validation_key == correct_key:
-            st.session_state['license_validated'] = True
-            start_date = datetime.now(JAKARTA_TZ)
-            with open(license_file, 'w') as file:
-                file.write(start_date.isoformat())
-        else:
-            st.error("Invalid validation key. Please enter the correct key.")
+    # Upload SVG files
+    uploaded_files = st.file_uploader('Upload SVG Images', type='svg', accept_multiple_files=True)
 
-    if st.session_state['license_validated']:
-        # Check the license file for the start date
-        with open(license_file, 'r') as file:
-            start_date_str = file.read().strip()
-            start_date = datetime.fromisoformat(start_date_str)
+    if uploaded_files:
+        valid_files = [file for file in uploaded_files if file.type == 'image/svg+xml']
+        if valid_files and st.button("Process"):
+            with st.spinner("Processing..."):
+                try:
+                    # Configure AI model with API key
+                    genai.configure(api_key=api_key)
+                    model = genai.GenerativeModel('gemini-1.5-flash')
 
-        # Calculate the expiration date
-        expiration_date = start_date + timedelta(days=91)
-        current_date = datetime.now(JAKARTA_TZ)
+                    # Create a temporary directory to store the uploaded images
+                    with tempfile.TemporaryDirectory() as temp_dir:
+                        image_paths = []
+                        metadata_list = []
 
-        if current_date > expiration_date:
-            st.error("Your license has expired. Please contact support for a new license key.")
-            return
-        else:
-            days_remaining = (expiration_date - current_date).days
-            st.success(f"License valid. You have {days_remaining} days remaining. Max 45 files per upload, unlimited daily uploads.")
+                        # Process each SVG file
+                        for file in valid_files:
+                            temp_svg_path = os.path.join(temp_dir, file.name)
+                            with open(temp_svg_path, 'wb') as f:
+                                f.write(file.read())
 
-        # API Key input
-        api_key = st.text_input('Enter your [API](https://makersuite.google.com/app/apikey) Key', value=st.session_state['api_key'] or '')
+                            # Convert SVG to PNG
+                            png_image_path = convert_svg_to_png(temp_svg_path)
 
-        # Save API key in session state
-        if api_key:
-            st.session_state['api_key'] = api_key
+                            # Generate metadata for the converted PNG
+                            metadata = generate_metadata(model, png_image_path)
+                            metadata_list.append(metadata)
 
-        # Upload SVG files
-        uploaded_files = st.file_uploader('Upload SVG Images (Only SVG Supported)', accept_multiple_files=True)
+                            # Display the result below the processing section
+                            st.markdown(f"**Title:** {metadata['Title']}")
+                            st.markdown(f"**Tags:** {metadata['Tags']}")
 
-        if uploaded_files:
-            valid_files = [file for file in uploaded_files if file.type == 'image/svg+xml']
-            invalid_files = [file for file in uploaded_files if file not in valid_files]
+                        # Write metadata to CSV and TXT
+                        output_csv_path = os.path.join(temp_dir, 'metadata.csv')
+                        write_metadata_to_csv(metadata_list, output_csv_path)
 
-            if invalid_files:
-                st.error("Only SVG files are supported.")
+                        output_txt_path = os.path.join(temp_dir, 'metadata.txt')
+                        write_metadata_to_txt(metadata_list, output_txt_path)
 
-            if valid_files and st.button("Process"):
-                with st.spinner("Processing..."):
-                    try:
-                        # Check and update upload count for the current date
-                        if st.session_state['upload_count']['date'] != current_date.date():
-                            st.session_state['upload_count'] = {
-                                'date': current_date.date(),
-                                'count': 0
-                            }
-                        
-                        # Check if remaining uploads are available
-                        if st.session_state['upload_count']['count'] + len(valid_files) > 1000000:
-                            remaining_uploads = 1000000 - st.session_state['upload_count']['count']
-                            st.warning(f"You have exceeded the upload limit. Remaining uploads for today: {remaining_uploads}")
-                            return
-                        else:
-                            st.session_state['upload_count']['count'] += len(valid_files)
-                            st.success(f"Uploads successful. Remaining uploads for today: {1000000 - st.session_state['upload_count']['count']}")
+                        # Provide download buttons for the CSV and TXT
+                        with open(output_csv_path, 'rb') as csv_file:
+                            st.download_button(
+                                label="Download Metadata CSV",
+                                data=csv_file,
+                                file_name="metadata.csv",
+                                mime="text/csv"
+                            )
 
-                        genai.configure(api_key=api_key)  # Configure AI model with API key
-                        model = genai.GenerativeModel('gemini-1.5-flash')
+                        with open(output_txt_path, 'rb') as txt_file:
+                            st.download_button(
+                                label="Download Metadata TXT",
+                                data=txt_file,
+                                file_name="metadata.txt",
+                                mime="text/plain"
+                            )
 
-                        # Create a temporary directory to store the uploaded SVG files
-                        with tempfile.TemporaryDirectory() as temp_dir:
-                            # Save the uploaded files to the temporary directory
-                            image_paths = []
-                            for file in valid_files:
-                                temp_image_path = os.path.join(temp_dir, file.name)
-                                with open(temp_image_path, 'wb') as f:
-                                    f.write(file.read())
-                                image_paths.append(temp_image_path)
-
-                            # Process each SVG and generate titles and tags using AI
-                            metadata_list = []
-                            process_placeholder = st.empty()
-                            for i, image_path in enumerate(image_paths):
-                                process_placeholder.text(f"Processing Generate Titles and Tags {i + 1}/{len(image_paths)}")
-                                try:
-                                    metadata = generate_metadata(model, image_path)
-                                    metadata_list.append(metadata)
-                                except Exception as e:
-                                    st.error(f"An error occurred while generating metadata for {os.path.basename(image_path)}: {e}")
-                                    st.error(traceback.format_exc())
-                                    continue
-
-                            # Show the generated metadata
-                            st.subheader("Generated Titles and Tags")
-                            for metadata in metadata_list:
-                                st.write(f"**Title:** {metadata['Title']}")
-                                st.write(f"**Tags:** {metadata['Tags']}")
-                                st.write("---")
-
-                            # Write metadata to CSV
-                            output_csv_path = os.path.join(temp_dir, 'metadata.csv')
-                            write_metadata_to_csv(metadata_list, output_csv_path)
-
-                            # Write metadata to TXT
-                            output_txt_path = os.path.join(temp_dir, 'metadata.txt')
-                            write_metadata_to_txt(metadata_list, output_txt_path)
-
-                            # Provide download buttons for the CSV and TXT
-                            with open(output_csv_path, 'rb') as csv_file:
-                                st.download_button(
-                                    label="Download Metadata CSV",
-                                    data=csv_file,
-                                    file_name="metadata.csv",
-                                    mime="text/csv"
-                                )
-
-                            with open(output_txt_path, 'rb') as txt_file:
-                                st.download_button(
-                                    label="Download Metadata TXT",
-                                    data=txt_file,
-                                    file_name="metadata.txt",
-                                    mime="text/plain"
-                                )
-
-                    except Exception as e:
-                        st.error(f"An error occurred: {e}")
-                        st.error(traceback.format_exc())  # Print detailed error traceback for debugging
+                except Exception as e:
+                    st.error(f"An error occurred: {e}")
+                    st.error(traceback.format_exc())  # Print detailed error traceback for debugging
 
 if __name__ == '__main__':
     main()

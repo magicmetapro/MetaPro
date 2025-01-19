@@ -12,11 +12,11 @@ import unicodedata
 from datetime import datetime, timedelta
 import pytz
 import cairosvg
-from PIL import Image
 from menu import menu_with_redirect
-from svglib.svglib import svg2rlg  # Import svglib
-from reportlab.graphics import renderPM  # Import reportlab for rendering SVG
-from PIL import Image as PILImage  # Import Pillow for image handling
+from svglib.svglib import svg2rlg
+from reportlab.graphics import renderPM
+from PIL import Image
+from PIL import Image as PILImage
 
 st.set_option("client.showSidebarNavigation", False)
 

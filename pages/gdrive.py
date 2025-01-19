@@ -11,6 +11,8 @@ import re
 import unicodedata
 from datetime import datetime, timedelta
 import pytz
+import cairosvg
+from PIL import Image
 from menu import menu_with_redirect
 from svglib.svglib import svg2rlg  # Import svglib
 from reportlab.graphics import renderPM  # Import reportlab for rendering SVG

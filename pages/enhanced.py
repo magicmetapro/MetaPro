@@ -2,16 +2,23 @@ import streamlit as st
 import os
 import tempfile
 from PIL import Image
-import cairosvg
 import google.generativeai as genai
+import iptcinfo3
+import zipfile
+import time
+import traceback
 import re
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
+from menu import menu_with_redirect
 from xml.etree import ElementTree as ET
 import csv
 
 st.set_option("client.showSidebarNavigation", False)
+
+# Redirect to app.py if not logged in, otherwise show the navigation menu
+menu_with_redirect()
 
 # Apply custom styling
 st.markdown("""
@@ -29,8 +36,15 @@ st.markdown("""
 # Set the timezone to UTC+7 Jakarta
 JAKARTA_TZ = pytz.timezone('Asia/Jakarta')
 
+# Initialize session state for license validation
 if 'license_validated' not in st.session_state:
     st.session_state['license_validated'] = False
+
+if 'upload_count' not in st.session_state:
+    st.session_state['upload_count'] = {
+        'date': None,
+        'count': 0
+    }
 
 if 'api_key' not in st.session_state:
     st.session_state['api_key'] = None
@@ -52,15 +66,6 @@ def extract_svg_content(svg_path):
         st.error(f"Failed to process SVG content: {e}")
         return None
 
-# Function to convert SVG to PNG
-def convert_svg_to_png(svg_path, output_path):
-    try:
-        cairosvg.svg2png(url=svg_path, write_to=output_path)
-        return output_path
-    except Exception as e:
-        st.error(f"Failed to convert SVG to PNG: {e}")
-        return None
-
 # Function to generate metadata for images or SVGs using AI model
 def generate_metadata(model, content, filename):
     caption = model.generate_content([  
@@ -77,13 +82,16 @@ def generate_metadata(model, content, filename):
     keywords = filtered_tags.split(',')[:49]  # Limit to 49 words
     trimmed_tags = ','.join(keywords)
 
-    return [
+    # Creating metadata row
+    metadata_row = [
         filename,
         caption.text.strip(),
         trimmed_tags.strip(),
-        "",  # Placeholder for Category
-        ""  # Placeholder for Releases
+        3,  # Dummy category, you can adjust this as per your needs
+        'Haleeq Whitten, Ludovic Hillion, Morgan Greentstreet, Christine Manore'  # Example release names
     ]
+
+    return metadata_row
 
 # Function to save metadata to a CSV file
 def save_metadata_to_csv(metadata_rows):
@@ -91,16 +99,45 @@ def save_metadata_to_csv(metadata_rows):
     try:
         with open(csv_file_path, mode='w', newline='') as file:
             writer = csv.writer(file)
-            writer.writerow(['Filename', 'Title', 'Keywords', 'Category', 'Releases'])  # CSV header
+            writer.writerow(['Filename', 'Title', 'Keywords', 'Category', 'Release Names'])  # CSV header
             writer.writerows(metadata_rows)  # Write metadata rows
 
         return csv_file_path
     except Exception as e:
         st.error(f"An error occurred while saving CSV: {e}")
+        st.error(traceback.format_exc())
         return None
 
+# Function to zip processed files
+def zip_processed_files(file_paths):
+    try:
+        zip_file_path = os.path.join(tempfile.gettempdir(), 'processed_files.zip')
+
+        with zipfile.ZipFile(zip_file_path, 'w') as zipf:
+            for file_path in file_paths:
+                zipf.write(file_path, arcname=os.path.basename(file_path))
+
+        return zip_file_path
+
+    except Exception as e:
+        st.error(f"An error occurred while zipping files: {e}")
+        st.error(traceback.format_exc())
+        return None
+
+# Main function
 def main():
-    st.title("SVG to PNG Metadata Generator")
+    """Main function for the Streamlit app."""
+
+    # Display WhatsApp chat link
+    st.markdown("""
+    <div style="text-align: center; margin-top: 20px;">
+        <a href="https://wa.me/6282265298845" target="_blank">
+            <button style="background-color: #1976d2; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
+                MetaPro
+            </button>
+        </a>
+    </div>
+    """, unsafe_allow_html=True)
 
     if not st.session_state['license_validated']:
         validation_key = st.text_input('License Key', type='password')
@@ -133,16 +170,31 @@ def main():
                     model = genai.GenerativeModel('gemini-1.5-flash')
 
                     metadata_rows = []
+                    processed_files = []
                     for file in valid_files:
                         temp_path = os.path.join(tempfile.gettempdir(), file.name)
                         with open(temp_path, 'wb') as f:
                             f.write(file.read())
 
                         if file.type == 'image/svg+xml':
-                            png_path = temp_path.replace('.svg', '.png')
-                            convert_svg_to_png(temp_path, png_path)
                             content = extract_svg_content(temp_path)
-                            metadata_rows.append(generate_metadata(model, content, os.path.basename(png_path)))
+                        else:
+                            img = Image.open(temp_path)
+                            content = f"An image with dimensions {img.size}"
+
+                        # Generate metadata
+                        metadata_row = generate_metadata(model, content, file.name)
+                        metadata_rows.append(metadata_row)
+
+                        # Save metadata to a text file
+                        normalized_title = normalize_text(metadata_row[1])
+                        new_file_path = os.path.join(tempfile.gettempdir(), f"{normalized_title}.txt")
+                        
+                        with open(new_file_path, 'w') as meta_file:
+                            meta_file.write(f"Title: {metadata_row[1]}\n")
+                            meta_file.write(f"Keywords: {metadata_row[2]}\n")
+
+                        processed_files.append(new_file_path)
 
                     # Save metadata to CSV
                     csv_path = save_metadata_to_csv(metadata_rows)
@@ -150,8 +202,15 @@ def main():
                         with open(csv_path, 'rb') as csv_file:
                             st.download_button("Download Metadata CSV", csv_file, "metadata.csv", "application/csv")
 
+                    # Zip processed files
+                    zip_path = zip_processed_files(processed_files)
+                    if zip_path:
+                        with open(zip_path, 'rb') as zip_file:
+                            st.download_button("Download Processed Files", zip_file, "processed_files.zip", "application/zip")
+
                 except Exception as e:
                     st.error(f"An error occurred: {e}")
+                    st.error(traceback.format_exc())
 
 if __name__ == '__main__':
     main()

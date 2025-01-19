@@ -2,6 +2,7 @@ google-generativeai
 streamlit
 Pillow
 wand
+imagemagick
 svglib
 reportlab
 cairocffi

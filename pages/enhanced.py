@@ -48,7 +48,7 @@ def svg_to_jpg(svg_path, output_path):
     try:
         # Convert SVG to PNG first
         png_output_path = output_path.replace(".svg", ".png")
-        cairosvg.svg2png(url=svg_path, write_to=png_output_path, dpi=300)
+        cairosvg.svg2jpg(url=svg_path, write_to=png_output_path, dpi=300)
 
         # Convert PNG to JPG
         img = Image.open(png_output_path)

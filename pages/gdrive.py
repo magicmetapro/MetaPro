@@ -12,7 +12,9 @@ import unicodedata
 from datetime import datetime, timedelta
 import pytz
 from menu import menu_with_redirect
-import cairosvg  # Required for SVG to JPG conversion
+from svglib.svglib import svg2rlg  # Import svglib
+from reportlab.graphics import renderPM  # Import reportlab for rendering SVG
+from PIL import Image as PILImage  # Import Pillow for image handling
 
 st.set_option("client.showSidebarNavigation", False)
 
@@ -115,12 +117,17 @@ def zip_processed_images(image_paths):
         st.error(traceback.format_exc())
         return None
 
-# Function to convert SVG to JPG
+# Function to convert SVG to JPEG using svglib and reportlab
 def convert_svg_to_jpeg(svg_path):
     try:
+        # Using svglib to render the SVG
+        drawing = svg2rlg(svg_path)
+        # Save the rendered SVG as a PNG
+        png_path = svg_path.rsplit('.', 1)[0] + '.png'
+        renderPM.drawToFile(drawing, png_path, fmt="PNG")
+        # Convert the PNG to JPEG using Pillow
+        img = PILImage.open(png_path).convert('RGB')
         jpeg_path = svg_path.rsplit('.', 1)[0] + '.jpg'
-        cairosvg.svg2png(url=svg_path, write_to=jpeg_path, dpi=300)
-        img = Image.open(jpeg_path).convert('RGB')
         img.save(jpeg_path, 'JPEG', quality=100)
         return jpeg_path
     except Exception as e:

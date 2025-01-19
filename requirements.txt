@@ -1,6 +1,7 @@
 google-generativeai
 streamlit
 Pillow
+wand
 svglib
 reportlab
 cairocffi

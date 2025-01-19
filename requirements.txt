@@ -7,7 +7,6 @@ cairocffi
 piexif
 cairosvg
 pandas
-piexif
 iptcinfo3
 tenacity
 protobuf

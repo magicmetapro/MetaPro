@@ -166,8 +166,6 @@ def save_metadata_to_csv(metadata_list, output_path):
             'Filename': metadata.get('Filename', ''),
             'Title': metadata.get('Title', ''),
             'Keywords': metadata.get('Tags', ''),
-            'Category': metadata.get('Category', 'N/A'),  # Placeholder for category
-            'Release(s)': metadata.get('Releases', 'N/A')  # Placeholder for releases
         }
         csv_rows.append(row)
     

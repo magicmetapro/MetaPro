@@ -218,6 +218,13 @@ def main():
                                     st.error(traceback.format_exc())
                                     continue
 
+                            # Show the generated metadata
+                            st.subheader("Generated Titles and Tags")
+                            for metadata in metadata_list:
+                                st.write(f"**Title:** {metadata['Title']}")
+                                st.write(f"**Tags:** {metadata['Tags']}")
+                                st.write("---")
+
                             # Write metadata to CSV
                             output_csv_path = os.path.join(temp_dir, 'metadata.csv')
                             write_metadata_to_csv(metadata_list, output_csv_path)

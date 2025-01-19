@@ -180,15 +180,17 @@ def main():
     """Main function for the Streamlit app."""
 
     # Display WhatsApp chat link
-    st.markdown(\"\"\"
-    <div style="text-align: center; margin-top: 20px;">
-        <a href="https://wa.me/6282265298845" target="_blank">
-            <button style="background-color: #1976d2; color: white; border: none; padding: 10px 20px; border-radius: 5px; cursor: pointer;">
-                MetaPro
-            </button>
-        </a>
-    </div>
-    \"\"\", unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+        #MainMenu, header, footer {
+            visibility: hidden;
+        }
+        section[data-testid="stSidebar"] {
+            top: 0;
+            height: 10vh;
+        }
+    </style>
+    """, unsafe_allow_html=True)
 
     # Check if license has already been validated
     license_file = "license.txt"

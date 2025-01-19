@@ -82,17 +82,6 @@ def generate_metadata(model, content, filename):
     keywords = filtered_tags.split(',')[:49]  # Limit to 49 words
     trimmed_tags = ','.join(keywords)
 
-    # Creating metadata row
-    metadata_row = [
-        filename,
-        caption.text.strip(),
-        trimmed_tags.strip(),
-        3,  # Dummy category, you can adjust this as per your needs
-        'Haleeq Whitten, Ludovic Hillion, Morgan Greentstreet, Christine Manore'  # Example release names
-    ]
-
-    return metadata_row
-
 # Function to save metadata to a CSV file
 def save_metadata_to_csv(metadata_rows):
     csv_file_path = os.path.join(tempfile.gettempdir(), 'metadata.csv')

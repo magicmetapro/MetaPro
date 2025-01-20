@@ -59,57 +59,23 @@ def generate_metadata(model, img):
         'Tags': trimmed_tags.strip()
     }
 
-# Function to embed metadata into images and rename based on title
-def embed_metadata(image_path, metadata):
-    try:
-        # Open the image file
-        img = Image.open(image_path)
+# Function to save results to disk
+def save_results(results, temp_dir):
+    csv_file_path = os.path.join(temp_dir, "processed_metadata.csv")
+    with open(csv_file_path, 'w', newline='') as csvfile:
+        fieldnames = ['Filename', 'Title', 'Keywords', 'Category', 'Releases']
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
 
-        # Load existing IPTC data (if any)
-        iptc_data = iptcinfo3.IPTCInfo(image_path, force=True)
-
-        # Clear existing IPTC metadata
-        for tag in iptc_data._data:
-            iptc_data._data[tag] = []
-
-        # Update IPTC data with new metadata
-        iptc_data['keywords'] = [metadata.get('Tags', '')]  # Keywords
-        iptc_data['caption/abstract'] = [metadata.get('Title', '')]  # Title
-
-        # Save the image with the embedded metadata
-        iptc_data.save()
-
-        # Rename the file based on the generated title
-        base_dir = os.path.dirname(image_path)
-        normalized_title = normalize_text(metadata['Title'])
-        new_image_path = os.path.join(base_dir, f"{normalized_title}.jpg")
-
-        # Ensure unique file names
-        counter = 1
-        while os.path.exists(new_image_path):
-            new_image_path = os.path.join(base_dir, f"{normalized_title}_{counter}.jpg")
-            counter += 1
-
-        os.rename(image_path, new_image_path)
-
-        return new_image_path
-
-    except Exception as e:
-        st.error(f"An error occurred while embedding metadata: {e}")
-        st.error(traceback.format_exc())  # Print detailed error traceback for debugging
-
-# Function to save partial results to disk
-def save_partial_results(results, temp_dir):
-    partial_csv = os.path.join(temp_dir, "partial_metadata.csv")
-    with open(partial_csv, 'a', newline='') as f:
-        writer = csv.DictWriter(f, fieldnames=['Filename', 'Title', 'Keywords', 'Category', 'Releases'])
+        writer.writeheader()
         for result in results:
             writer.writerow(result)
 
+    return csv_file_path
+
 # Function to process a batch of files using threading
-def process_batch(model, files_chunk, temp_dir, results, api_key):
-    # Set API key for the current batch
+def process_batch(model, files_chunk, results, api_key):
     try:
+        # Set API key for the current batch
         genai.configure(api_key=api_key)
     except Exception as e:
         st.error(f"Failed to configure API key: {e}")
@@ -129,7 +95,6 @@ def process_batch(model, files_chunk, temp_dir, results, api_key):
                     'Category': 3,
                     'Releases': releases
                 })
-            save_partial_results(results, temp_dir)
         except Exception as e:
             st.error(f"An error occurred while processing {file.name}: {e}")
             st.error(traceback.format_exc())
@@ -150,47 +115,42 @@ def main():
         st.warning("Please upload some image files to process.")
         return
 
-    # Split files into batches of 6
-    chunks = [uploaded_files[i:i + 6] for i in range(0, len(uploaded_files), 6)]
-    threads = []
-    results = []
-    with tempfile.TemporaryDirectory() as temp_dir:
-        api_keys = [
-            "AIzaSyBzKrjj-UwAVm-0MEjfSx3ShnJ4fDrsACU", "API_KEY_2", "API_KEY_3", "API_KEY_4", "API_KEY_5", "API_KEY_6"
-        ]
-        api_key_index = 0
+    # Button to trigger processing
+    if st.button("Process All Images"):
+        # Split files into batches of 6
+        chunks = [uploaded_files[i:i + 6] for i in range(0, len(uploaded_files), 6)]
+        threads = []
+        results = []
+        with tempfile.TemporaryDirectory() as temp_dir:
+            api_keys = [
+                "AIzaSyBzKrjj-UwAVm-0MEjfSx3ShnJ4fDrsACU", "API_KEY_2", "API_KEY_3", "API_KEY_4", "API_KEY_5", "API_KEY_6"
+            ]
+            api_key_index = 0
 
-        for chunk in chunks:
-            # Rotate API keys for each batch
-            current_api_key = api_keys[api_key_index % len(api_keys)]
-            api_key_index += 1
+            for chunk in chunks:
+                # Rotate API keys for each batch
+                current_api_key = api_keys[api_key_index % len(api_keys)]
+                api_key_index += 1
 
-            thread = threading.Thread(target=process_batch, args=(model, chunk, temp_dir, results, current_api_key))
-            threads.append(thread)
-            thread.start()
-        
-        for thread in threads:
-            thread.join()
+                thread = threading.Thread(target=process_batch, args=(model, chunk, results, current_api_key))
+                threads.append(thread)
+                thread.start()
+            
+            for thread in threads:
+                thread.join()
 
-    # Save results to CSV file
-    csv_file_path = os.path.join(tempfile.gettempdir(), 'processed_metadata.csv')
-    with open(csv_file_path, 'w', newline='') as csvfile:
-        fieldnames = ['Filename', 'Title', 'Keywords', 'Category', 'Releases']
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            # Save results to CSV file
+            csv_file_path = save_results(results, temp_dir)
 
-        writer.writeheader()
-        for result in results:
-            writer.writerow(result)
-
-    # Provide download link for the CSV file
-    st.success("Processing complete. Download your metadata CSV below:")
-    with open(csv_file_path, 'rb') as csv_file:
-        st.download_button(
-            label="Download Processed Metadata",
-            data=csv_file,
-            file_name="processed_metadata.csv",
-            mime="application/csv"
-        )
+            # Provide download link for the CSV file
+            st.success("Processing complete. Download your metadata CSV below:")
+            with open(csv_file_path, 'rb') as csv_file:
+                st.download_button(
+                    label="Download Processed Metadata",
+                    data=csv_file,
+                    file_name="processed_metadata.csv",
+                    mime="application/csv"
+                )
 
 if __name__ == '__main__':
     main()

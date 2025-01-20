@@ -33,14 +33,14 @@ def generate_metadata(model, img_path):
         with Image.open(img_path) as img:
             # Generate title
             caption = model.generate_content([
-                "Generate a professional one-line title summarizing the image subject, setting, and key themes.",
-                img
-            ])
-            # Generate keywords
-            tags = model.generate_content([
-                "Generate a list of 45-50 relevant keywords describing the image.",
-                img
-            ])
+        "Analyze the uploaded image and generate a clear, descriptive, and professional one-line title suitable for a microstock image. The title should summarize the main subject, setting, key themes, and concepts, incorporating potential keywords for searches. Ensure it captures all relevant aspects, including actions, objects, emotions, environment, and context.",
+        img
+    ])
+    tags = model.generate_content([
+        "Analyze the uploaded image and generate a comprehensive list of 45–50 relevant and specific keywords that encapsulate all aspects of the image, such as actions, objects, emotions, environment, and context. The first five keywords must be the most relevant. Ensure each keyword is a single word, separated by commas, and optimized for searchability and relevance.",
+        img
+    ])
+            
             filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
             keywords = filtered_tags.split(',')[:49]
             trimmed_tags = ','.join(keywords)

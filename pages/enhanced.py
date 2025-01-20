@@ -58,12 +58,12 @@ def generate_metadata(model, img_path):
         return None
 
 # Convert SVG to PNG function
+def convert_svg_to_png(svg_file_path):
+    try:
         png_file_path = svg_file_path.rsplit('.', 1)[0] + '.png'
         with WandImage(filename=svg_file_path, format='svg') as img:
             img.background_color = "white"
             img.alpha_channel = 'remove'
-def convert_svg_to_png(svg_file_path):
-    try:
             img.format = "png"
             img.save(filename=png_file_path)
         return png_file_path

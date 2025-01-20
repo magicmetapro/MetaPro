@@ -9,8 +9,6 @@ cairosvg
 pandas
 iptcinfo3
 tenacity
-libcairo2
-libcairo2-dev
 protobuf
 google-auth
 google-auth-oauthlib

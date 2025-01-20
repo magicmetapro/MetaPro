@@ -80,8 +80,8 @@ def main():
     if not st.session_state['license_validated']:
         license_key = st.text_input("Enter your license key:", type="password")
         if st.button("Validate License"):
-            if license_key == "valid_key":
-                st.session_state['license_validated'] = False
+            if license_key == "a":
+                st.session_state['license_validated'] = True
             else:
                 st.error("Invalid license key.")
         return

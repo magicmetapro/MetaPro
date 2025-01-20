@@ -18,12 +18,8 @@ st.set_option("client.showSidebarNavigation", False)
 if 'license_validated' not in st.session_state:
     st.session_state['license_validated'] = False
 
-# API keys are hardcoded into the script
-API_KEYS = [
-    "AIzaSyBzKrjj-UwAVm-0MEjfSx3ShnJ4fDrsACU",
-    "AIzaSyCWb4ABaI_hSbKlZIVCztrx72EuuSf733I",
-    "AIzaSyBjh-5PUOIFievYb5EQ0A1fsg1YvWNl3hQ"
-]
+if 'api_keys' not in st.session_state:
+    st.session_state['api_keys'] = []
 
 # Normalize text function
 def normalize_text(text, max_length=100):
@@ -37,12 +33,12 @@ def generate_metadata(model, img_path):
         with Image.open(img_path) as img:
             # Generate title
             caption = model.generate_content([
-                "Analyze the uploaded image and generate a clear, descriptive, and professional one-line title suitable for a microstock image. The title should summarize the main subject, setting, key themes, and concepts, incorporating potential keywords for searches. Ensure it captures all relevant aspects, including actions, objects, emotions, environment, and context.",
+                "Generate a professional one-line title summarizing the image subject, setting, and key themes.",
                 img
             ])
             # Generate keywords
             tags = model.generate_content([
-                "Analyze the uploaded image and generate a comprehensive list of 45–50 relevant and specific keywords that encapsulate all aspects of the image, such as actions, objects, emotions, environment, and context. The first five keywords must be the most relevant. Ensure each keyword is a single word, separated by commas, and optimized for searchability and relevance.",
+                "Generate a list of 45-50 relevant keywords describing the image.",
                 img
             ])
             filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
@@ -101,7 +97,7 @@ def process_file(args):
 
 # Main function
 def main():
-    st.title("MetaPro")
+    st.title("Batch Metadata Generator with Delay and Multiprocessing")
 
     # License validation
     if not st.session_state['license_validated']:
@@ -111,6 +107,15 @@ def main():
                 st.session_state['license_validated'] = True
             else:
                 st.error("Invalid license key.")
+        return
+
+    # API keys input
+    api_keys_input = st.text_area("Enter your API keys (one per line):")
+    if api_keys_input:
+        st.session_state['api_keys'] = api_keys_input.splitlines()
+
+    if not st.session_state['api_keys']:
+        st.error("Please provide at least one API key.")
         return
 
     # Upload SVG files
@@ -130,7 +135,8 @@ def main():
                         svg_file_paths.append(temp_svg_path)
 
                     # Prepare arguments for multiprocessing
-                    args = [(API_KEYS[i % len(API_KEYS)], file) for i, file in enumerate(svg_file_paths)]
+                    api_keys = st.session_state['api_keys']
+                    args = [(api_keys[i % len(api_keys)], file) for i, file in enumerate(svg_file_paths)]
 
                     # Process files in parallel
                     results = []

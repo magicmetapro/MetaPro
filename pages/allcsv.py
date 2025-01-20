@@ -128,7 +128,7 @@ def process_batch(model, files_chunk, temp_dir, results):
 def main():
     """Main function for the Streamlit app."""
     # Assuming the API key and model are set up
-    model = genai.Model('your-model-name')
+    model = genai.Model('gemini-1.5-flash')
 
     # Example list of uploaded files
     uploaded_files = []  # This should be populated with the actual uploaded files

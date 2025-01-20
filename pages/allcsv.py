@@ -120,12 +120,14 @@ def process_batch(model, files_chunk, temp_dir, results, api_key):
             img = Image.open(file)
             metadata = generate_metadata(model, img)
             if metadata:
+                # Formatting Releases field as "Name1, Name2, ..."
+                releases = "Haleeq Whitten, Ludovic Hillion, Morgan Greentstreet, Christine Manore"
                 results.append({
                     'Filename': os.path.basename(file.name),
                     'Title': metadata['Title'],
                     'Keywords': metadata['Tags'],
                     'Category': 3,
-                    'Releases': "Placeholder Name 1, Placeholder Name 2"
+                    'Releases': releases
                 })
             save_partial_results(results, temp_dir)
         except Exception as e:

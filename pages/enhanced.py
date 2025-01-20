@@ -80,7 +80,7 @@ def convert_svg_to_png(svg_file_path):
 
 # Main function
 def main():
-    st.title("Metadata Generator")
+    st.title("MetaPro")
 
     # License validation logic
     if not st.session_state['license_validated']:

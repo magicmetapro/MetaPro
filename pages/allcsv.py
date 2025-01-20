@@ -8,7 +8,6 @@ import unicodedata
 from PIL import Image
 import streamlit as st
 import google.generativeai as genai
-import iptcinfo3
 import tempfile
 from menu import menu_with_redirect
 
@@ -36,28 +35,40 @@ def normalize_text(text, max_length=100):
     cleaned = re.sub(r'[^a-zA-Z0-9_\-\s]', '', normalized).strip()
     return cleaned[:max_length]  # Truncate to the specified max length
 
-# Function to generate metadata for images using AI model
-def generate_metadata(model, img):
-    caption = model.generate_content([
-        "Analyze the uploaded image and generate a clear, descriptive, and professional one-line title suitable for a microstock image. The title should summarize the main subject, setting, key themes, and concepts, incorporating potential keywords for searches. Ensure it captures all relevant aspects, including actions, objects, emotions, environment, and context.",
-        img
-    ])
-    tags = model.generate_content([
-        "Analyze the uploaded image and generate a comprehensive list of 45–50 relevant and specific keywords that encapsulate all aspects of the image, such as actions, objects, emotions, environment, and context. The first five keywords must be the most relevant. Ensure each keyword is a single word, separated by commas, and optimized for searchability and relevance.",
-        img
-    ])
+# Function to generate metadata for images using the Gemini model
+def generate_metadata(model, image_path):
+    try:
+        with open(image_path, "rb") as image_file:
+            img = image_file.read()
 
-    # Filter out undesirable characters from the generated tags
-    filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
-    
-    # Trim the generated keywords if they exceed 49 words
-    keywords = filtered_tags.split(',')[:49]  # Limit to 49 words
-    trimmed_tags = ','.join(keywords)
+        # Use Gemini model to generate title
+        caption_response = model.generate_content([
+            "Analyze the uploaded image and generate a clear, descriptive, and professional one-line title suitable for a microstock image. The title should summarize the main subject, setting, key themes, and concepts, incorporating potential keywords for searches. Ensure it captures all relevant aspects, including actions, objects, emotions, environment, and context.",
+            img
+        ])
+        title = caption_response.text.strip()
 
-    return {
-        'Title': caption.text.strip(),  # Remove leading/trailing whitespace
-        'Tags': trimmed_tags.strip()
-    }
+        # Use Gemini model to generate tags (keywords)
+        tags_response = model.generate_content([
+            "Analyze the uploaded image and generate a comprehensive list of 45–50 relevant and specific keywords that encapsulate all aspects of the image, such as actions, objects, emotions, environment, and context. The first five keywords must be the most relevant. Ensure each keyword is a single word, separated by commas, and optimized for searchability and relevance.",
+            img
+        ])
+        tags = tags_response.text.strip()
+
+        # Filter out undesirable characters from the generated tags
+        filtered_tags = re.sub(r'[^\w\s,]', '', tags)
+
+        # Limit the number of keywords to 49
+        keywords = filtered_tags.split(',')[:49]
+        trimmed_tags = ','.join(keywords)
+
+        return {
+            'Title': title,
+            'Tags': trimmed_tags
+        }
+    except Exception as e:
+        st.error(f"Error generating metadata for image: {e}")
+        return None
 
 # Function to save results to disk
 def save_results(results, temp_dir):
@@ -83,8 +94,8 @@ def process_batch(model, files_chunk, results, api_key):
 
     for file in files_chunk:
         try:
-            img = Image.open(file)
-            metadata = generate_metadata(model, img)
+            # Generate metadata for each image
+            metadata = generate_metadata(model, file)
             if metadata:
                 # Formatting Releases field as "Name1, Name2, ..."
                 releases = "Haleeq Whitten, Ludovic Hillion, Morgan Greentstreet, Christine Manore"

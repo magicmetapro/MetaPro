@@ -33,15 +33,16 @@ def normalize_text(text, max_length=100):
 # Generate metadata function
 def generate_metadata(model, img_path):
     try:
-        with open(img_path, 'rb') as img_file:
+        # Open the image as a PIL object
+        with Image.open(img_path) as img:
             caption = model.generate_content([
                 "Analyze the uploaded image and generate a clear, descriptive, and professional one-line title suitable for a microstock image. The title should summarize the main subject, setting, key themes, and concepts, incorporating potential keywords for searches. Ensure it captures all relevant aspects, including actions, objects, emotions, environment, and context.",
-                img_file.read()
+                img
             ])
 
             tags = model.generate_content([
                 "Analyze the uploaded image and generate a comprehensive list of 45–50 relevant and specific keywords that encapsulate all aspects of the image, such as actions, objects, emotions, environment, and context. The first five keywords must be the most relevant. Ensure each keyword is a single word, separated by commas, and optimized for searchability and relevance.",
-                img_file.read()
+                img
             ])
 
         filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)

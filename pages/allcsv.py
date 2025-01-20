@@ -74,28 +74,30 @@ def convert_svg_to_png(svg_file_path):
 
 # Process a single file
 def process_file(args):
-    api_key, svg_file_path = args
+    api_key, file_path = args
     try:
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-1.5-flash')
 
-        # Convert SVG to PNG
-        png_file_path = convert_svg_to_png(svg_file_path)
-        if not png_file_path:
-            return None
+        # Handle file format
+        file_ext = os.path.splitext(file_path)[1].lower()
+
+        # For SVG, convert to PNG
+        if file_ext == '.svg':
+            file_path = convert_svg_to_png(file_path)
 
         # Generate metadata
-        metadata = generate_metadata(model, png_file_path)
+        metadata = generate_metadata(model, file_path)
         if metadata:
             return {
-                'Filename': os.path.basename(svg_file_path),
+                'Filename': os.path.basename(file_path),
                 'Title': metadata['Title'],
                 'Keywords': metadata['Keywords'],
                 'Category': 3,  # Placeholder
                 'Releases': "Placeholder Name 1, Placeholder Name 2"  # Placeholder
             }
     except Exception as e:
-        st.error(f"Error processing file {svg_file_path}: {e}")
+        st.error(f"Error processing file {file_path}: {e}")
         st.error(traceback.format_exc())
         return None
 
@@ -113,24 +115,24 @@ def main():
                 st.error("Invalid license key.")
         return
 
-    # Upload SVG files
-    uploaded_files = st.file_uploader("Upload SVG Files (Max: 100)", type="svg", accept_multiple_files=True)
+    # Upload files
+    uploaded_files = st.file_uploader("Upload Image Files (Max: 100)", type=["svg", "jpg", "png", "jpeg"], accept_multiple_files=True)
 
-    if uploaded_files and st.button("Process SVG Files"):
+    if uploaded_files and st.button("Process Files"):
         with st.spinner("Processing..."):
             try:
                 # Temporary directory for processing
                 with tempfile.TemporaryDirectory() as temp_dir:
                     # Save uploaded files to temporary directory
-                    svg_file_paths = []
-                    for svg_file in uploaded_files:
-                        temp_svg_path = os.path.join(temp_dir, svg_file.name)
-                        with open(temp_svg_path, 'wb') as temp_file:
-                            temp_file.write(svg_file.read())
-                        svg_file_paths.append(temp_svg_path)
+                    file_paths = []
+                    for file in uploaded_files:
+                        temp_file_path = os.path.join(temp_dir, file.name)
+                        with open(temp_file_path, 'wb') as temp_file:
+                            temp_file.write(file.read())
+                        file_paths.append(temp_file_path)
 
                     # Prepare arguments for multiprocessing
-                    args = [(API_KEYS[i % len(API_KEYS)], file) for i, file in enumerate(svg_file_paths)]
+                    args = [(API_KEYS[i % len(API_KEYS)], file) for i, file in enumerate(file_paths)]
 
                     # Process files in parallel
                     results = []

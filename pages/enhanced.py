@@ -18,8 +18,12 @@ st.set_option("client.showSidebarNavigation", False)
 if 'license_validated' not in st.session_state:
     st.session_state['license_validated'] = False
 
-if 'api_keys' not in st.session_state:
-    st.session_state['api_keys'] = []
+# API keys are hardcoded into the script
+API_KEYS = [
+    "AIzaSyBzKrjj-UwAVm-0MEjfSx3ShnJ4fDrsACU",
+    "AIzaSyCWb4ABaI_hSbKlZIVCztrx72EuuSf733I",
+    "AIzaSyBjh-5PUOIFievYb5EQ0A1fsg1YvWNl3hQ"
+]
 
 # Normalize text function
 def normalize_text(text, max_length=100):
@@ -97,7 +101,7 @@ def process_file(args):
 
 # Main function
 def main():
-    st.title("MetaPro")
+    st.title("metapro")
 
     # License validation
     if not st.session_state['license_validated']:
@@ -109,62 +113,8 @@ def main():
                 st.error("Invalid license key.")
         return
 
-    # API keys input
-    api_keys_input = st.text_area("Enter your API keys (one per line):")
-    if api_keys_input:
-        st.session_state['api_keys'] = api_keys_input.splitlines()
-
-    if not st.session_state['api_keys']:
-        st.error("Please provide at least one API key.")
-        return
-
     # Upload SVG files
     uploaded_files = st.file_uploader("Upload SVG Files (Max: 100)", type="svg", accept_multiple_files=True)
 
     if uploaded_files and st.button("Process SVG Files"):
-        with st.spinner("Processing..."):
-            try:
-                # Temporary directory for processing
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    # Save uploaded files to temporary directory
-                    svg_file_paths = []
-                    for svg_file in uploaded_files:
-                        temp_svg_path = os.path.join(temp_dir, svg_file.name)
-                        with open(temp_svg_path, 'wb') as temp_file:
-                            temp_file.write(svg_file.read())
-                        svg_file_paths.append(temp_svg_path)
-
-                    # Prepare arguments for multiprocessing
-                    api_keys = st.session_state['api_keys']
-                    args = [(api_keys[i % len(api_keys)], file) for i, file in enumerate(svg_file_paths)]
-
-                    # Process files in parallel
-                    results = []
-                    with Pool(processes=4) as pool:  # Adjust number of processes as needed
-                        results = pool.map(process_file, args)
-
-                    # Filter None results
-                    results = [res for res in results if res]
-
-                    # Save results to CSV
-                    csv_file_path = os.path.join(temp_dir, "metadata.csv")
-                    with open(csv_file_path, 'w', newline='') as csvfile:
-                        fieldnames = ['Filename', 'Title', 'Keywords', 'Category', 'Releases']
-                        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-                        writer.writeheader()
-                        writer.writerows(results)
-
-                    # Allow CSV download
-                    with open(csv_file_path, 'rb') as csv_file:
-                        st.download_button(
-                            label="Download Metadata CSV",
-                            data=csv_file,
-                            file_name="metadata.csv",
-                            mime="text/csv"
-                        )
-            except Exception as e:
-                st.error(f"An error occurred: {e}")
-                st.error(traceback.format_exc())
-
-if __name__ == "__main__":
-    main()
+        with st.spinner(

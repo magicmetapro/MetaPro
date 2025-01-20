@@ -99,6 +99,7 @@ def process_file(args):
         return None
 
 # Main function
+# Main function
 def main():
     st.title("Batch Metadata Generator with Delay and Multiprocessing")
 
@@ -137,22 +138,18 @@ def main():
                             temp_file.write(svg_file.read())
                         svg_file_paths.append(temp_svg_path)
 
-                    # Prepare arguments for multiprocessing
+                    # Prepare arguments for processing
                     api_keys = st.session_state['api_keys']
-                    progress = st.empty()
-
-                    def progress_callback(file_name):
-                        progress.write(f"Processing file: {os.path.basename(file_name)}")
-
-                    args = [(api_keys[i % len(api_keys)], file, progress_callback) for i, file in enumerate(svg_file_paths)]
-
-                    # Process files in parallel
                     results = []
-                    with Pool(processes=4) as pool:  # Adjust number of processes as needed
-                        results = pool.map(process_file, args)
+                    progress_bar = st.progress(0)
 
-                    # Filter None results
-                    results = [res for res in results if res]
+                    # Sequentially process files
+                    for i, svg_file_path in enumerate(svg_file_paths):
+                        st.write(f"Processing file: {os.path.basename(svg_file_path)}")
+                        result = process_file((api_keys[i % len(api_keys)], svg_file_path))
+                        if result:
+                            results.append(result)
+                        progress_bar.progress((i + 1) / len(svg_file_paths))
 
                     # Save results to CSV
                     csv_file_path = os.path.join(temp_dir, "metadata.csv")

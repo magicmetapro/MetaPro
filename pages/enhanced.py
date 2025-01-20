@@ -58,12 +58,12 @@ def generate_metadata(model, img_path):
         return None
 
 # Convert SVG to PNG function
-def convert_svg_to_png(svg_file_path):
-    try:
         png_file_path = svg_file_path.rsplit('.', 1)[0] + '.png'
         with WandImage(filename=svg_file_path, format='svg') as img:
             img.background_color = "white"
             img.alpha_channel = 'remove'
+def convert_svg_to_png(svg_file_path):
+    try:
             img.format = "png"
             img.save(filename=png_file_path)
         return png_file_path
@@ -101,7 +101,7 @@ def process_file(args):
 
 # Main function
 def main():
-    st.title("metapro")
+    st.title("MetaPro")
 
     # License validation
     if not st.session_state['license_validated']:
@@ -117,4 +117,48 @@ def main():
     uploaded_files = st.file_uploader("Upload SVG Files (Max: 100)", type="svg", accept_multiple_files=True)
 
     if uploaded_files and st.button("Process SVG Files"):
-        with st.spinner(
+        with st.spinner("Processing..."):
+            try:
+                # Temporary directory for processing
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    # Save uploaded files to temporary directory
+                    svg_file_paths = []
+                    for svg_file in uploaded_files:
+                        temp_svg_path = os.path.join(temp_dir, svg_file.name)
+                        with open(temp_svg_path, 'wb') as temp_file:
+                            temp_file.write(svg_file.read())
+                        svg_file_paths.append(temp_svg_path)
+
+                    # Prepare arguments for multiprocessing
+                    args = [(API_KEYS[i % len(API_KEYS)], file) for i, file in enumerate(svg_file_paths)]
+
+                    # Process files in parallel
+                    results = []
+                    with Pool(processes=4) as pool:  # Adjust number of processes as needed
+                        results = pool.map(process_file, args)
+
+                    # Filter None results
+                    results = [res for res in results if res]
+
+                    # Save results to CSV
+                    csv_file_path = os.path.join(temp_dir, "metadata.csv")
+                    with open(csv_file_path, 'w', newline='') as csvfile:
+                        fieldnames = ['Filename', 'Title', 'Keywords', 'Category', 'Releases']
+                        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                        writer.writeheader()
+                        writer.writerows(results)
+
+                    # Allow CSV download
+                    with open(csv_file_path, 'rb') as csv_file:
+                        st.download_button(
+                            label="Download Metadata CSV",
+                            data=csv_file,
+                            file_name="metadata.csv",
+                            mime="text/csv"
+                        )
+            except Exception as e:
+                st.error(f"An error occurred: {e}")
+                st.error(traceback.format_exc())
+
+if __name__ == "__main__":
+    main()

@@ -2,11 +2,11 @@ import streamlit as st
 import os
 import tempfile
 import csv
+import time
+from multiprocessing import Pool
 from PIL import Image
 from wand.image import Image as WandImage
 import google.generativeai as genai
-from datetime import datetime, timedelta
-import pytz
 import re
 import unicodedata
 import traceback
@@ -14,21 +14,12 @@ import traceback
 # Initialize Streamlit
 st.set_option("client.showSidebarNavigation", False)
 
-# Set timezone to UTC+7 (Jakarta)
-JAKARTA_TZ = pytz.timezone('Asia/Jakarta')
-
-# Initialize session state for license validation
+# Initialize session state
 if 'license_validated' not in st.session_state:
     st.session_state['license_validated'] = False
 
-if 'api_key' not in st.session_state:
-    st.session_state['api_key'] = None
-
-# List of 10 predefined API keys (replace with actual keys)
-API_KEYS = [
-    "AIzaSyBzKrjj-UwAVm-0MEjfSx3ShnJ4fDrsACU", "AIzaSyCWb4ABaI_hSbKlZIVCztrx72EuuSf733I", "API_KEY_3", "API_KEY_4", "API_KEY_5",
-    "API_KEY_6", "API_KEY_7", "API_KEY_8", "API_KEY_9", "API_KEY_10"
-]
+if 'api_keys' not in st.session_state:
+    st.session_state['api_keys'] = []
 
 # Normalize text function
 def normalize_text(text, max_length=100):
@@ -39,26 +30,24 @@ def normalize_text(text, max_length=100):
 # Generate metadata function
 def generate_metadata(model, img_path):
     try:
-        # Open the image as a PIL object
         with Image.open(img_path) as img:
+            # Generate title
             caption = model.generate_content([
-                "Analyze the uploaded image and generate a clear, descriptive, and professional one-line title suitable for a microstock image. The title should summarize the main subject, setting, key themes, and concepts, incorporating potential keywords for searches. Ensure it captures all relevant aspects, including actions, objects, emotions, environment, and context.",
+                "Generate a professional one-line title summarizing the image subject, setting, and key themes.",
                 img
             ])
-
+            # Generate keywords
             tags = model.generate_content([
-                "Analyze the uploaded image and generate a comprehensive list of 45–50 relevant and specific keywords that encapsulate all aspects of the image, such as actions, objects, emotions, environment, and context. The first five keywords must be the most relevant. Ensure each keyword is a single word, separated by commas, and optimized for searchability and relevance.",
+                "Generate a list of 45-50 relevant keywords describing the image.",
                 img
             ])
-
-        filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
-        keywords = filtered_tags.split(',')[:49]
-        trimmed_tags = ','.join(keywords)
-
-        return {
-            'Title': caption.text.strip(),
-            'Tags': trimmed_tags.strip()
-        }
+            filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
+            keywords = filtered_tags.split(',')[:49]
+            trimmed_tags = ','.join(keywords)
+            return {
+                'Title': caption.text.strip(),
+                'Keywords': trimmed_tags.strip()
+            }
     except Exception as e:
         st.error(f"Error generating metadata: {e}")
         st.error(traceback.format_exc())
@@ -79,11 +68,38 @@ def convert_svg_to_png(svg_file_path):
         st.error(traceback.format_exc())
         return None
 
+# Process a single file
+def process_file(args):
+    api_key, svg_file_path = args
+    try:
+        genai.configure(api_key=api_key)
+        model = genai.GenerativeModel('gemini-1.5-flash')
+
+        # Convert SVG to PNG
+        png_file_path = convert_svg_to_png(svg_file_path)
+        if not png_file_path:
+            return None
+
+        # Generate metadata
+        metadata = generate_metadata(model, png_file_path)
+        if metadata:
+            return {
+                'Filename': os.path.basename(svg_file_path),
+                'Title': metadata['Title'],
+                'Keywords': metadata['Keywords'],
+                'Category': 3,  # Placeholder
+                'Releases': "Placeholder Name 1, Placeholder Name 2"  # Placeholder
+            }
+    except Exception as e:
+        st.error(f"Error processing file {svg_file_path}: {e}")
+        st.error(traceback.format_exc())
+        return None
+
 # Main function
 def main():
-    st.title("Metadata Generator")
+    st.title("Batch Metadata Generator with Delay and Multiprocessing")
 
-    # License validation logic
+    # License validation
     if not st.session_state['license_validated']:
         license_key = st.text_input("Enter your license key:", type="password")
         if st.button("Validate License"):
@@ -93,55 +109,50 @@ def main():
                 st.error("Invalid license key.")
         return
 
-    # API key selection dropdown
-    selected_api_key = st.selectbox("Select API Key", API_KEYS)
+    # API keys input
+    api_keys_input = st.text_area("Enter your API keys (one per line):")
+    if api_keys_input:
+        st.session_state['api_keys'] = api_keys_input.splitlines()
 
-    # Set the selected API key in session state
-    st.session_state['api_key'] = selected_api_key
-
-    # Show the selected API key (for debugging purposes)
-    st.write(f"Using API Key: {selected_api_key}")
+    if not st.session_state['api_keys']:
+        st.error("Please provide at least one API key.")
+        return
 
     # Upload SVG files
-    uploaded_files = st.file_uploader("Upload SVG Files", type="svg", accept_multiple_files=True)
+    uploaded_files = st.file_uploader("Upload SVG Files (Max: 100)", type="svg", accept_multiple_files=True)
 
     if uploaded_files and st.button("Process SVG Files"):
         with st.spinner("Processing..."):
             try:
-                # Configure AI model
-                genai.configure(api_key=selected_api_key)
-                model = genai.GenerativeModel('gemini-1.5-flash')
-
                 # Temporary directory for processing
                 with tempfile.TemporaryDirectory() as temp_dir:
-                    csv_file_path = os.path.join(temp_dir, "metadata.csv")
+                    # Save uploaded files to temporary directory
+                    svg_file_paths = []
+                    for svg_file in uploaded_files:
+                        temp_svg_path = os.path.join(temp_dir, svg_file.name)
+                        with open(temp_svg_path, 'wb') as temp_file:
+                            temp_file.write(svg_file.read())
+                        svg_file_paths.append(temp_svg_path)
 
-                    # Prepare CSV for writing metadata
+                    # Prepare arguments for multiprocessing
+                    api_keys = st.session_state['api_keys']
+                    args = [(api_keys[i % len(api_keys)], file) for i, file in enumerate(svg_file_paths)]
+
+                    # Process files in parallel
+                    results = []
+                    with Pool(processes=4) as pool:  # Adjust number of processes as needed
+                        results = pool.map(process_file, args)
+
+                    # Filter None results
+                    results = [res for res in results if res]
+
+                    # Save results to CSV
+                    csv_file_path = os.path.join(temp_dir, "metadata.csv")
                     with open(csv_file_path, 'w', newline='') as csvfile:
-                        fieldnames = ['File Name', 'Title', 'Tags']
+                        fieldnames = ['Filename', 'Title', 'Keywords', 'Category', 'Releases']
                         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                         writer.writeheader()
-
-                        for svg_file in uploaded_files:
-                            temp_svg_path = os.path.join(temp_dir, svg_file.name)
-
-                            # Save uploaded SVG to temp directory
-                            with open(temp_svg_path, 'wb') as temp_file:
-                                temp_file.write(svg_file.read())
-
-                            # Convert SVG to PNG
-                            png_file_path = convert_svg_to_png(temp_svg_path)
-
-                            if png_file_path:
-                                # Generate metadata
-                                metadata = generate_metadata(model, png_file_path)
-
-                                if metadata:
-                                    writer.writerow({
-                                        'File Name': os.path.basename(png_file_path),
-                                        'Title': metadata['Title'],
-                                        'Tags': metadata['Tags']
-                                    })
+                        writer.writerows(results)
 
                     # Allow CSV download
                     with open(csv_file_path, 'rb') as csv_file:
@@ -151,7 +162,6 @@ def main():
                             file_name="metadata.csv",
                             mime="text/csv"
                         )
-
             except Exception as e:
                 st.error(f"An error occurred: {e}")
                 st.error(traceback.format_exc())

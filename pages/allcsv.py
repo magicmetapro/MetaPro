@@ -4,6 +4,7 @@ import csv
 import os
 import re
 import traceback
+import unicodedata
 from PIL import Image
 import streamlit as st
 import google.generativeai as genai
@@ -127,8 +128,19 @@ def process_batch(model, files_chunk, temp_dir, results):
 # Main function
 def main():
     """Main function for the Streamlit app."""
-    # Assuming the API key and model are set up
-    model = genai.Model('gemini-1.5-flash')
+    # Configure the API key for google.generativeai
+    try:
+        genai.configure(api_key="YOUR_API_KEY")  # Set your actual API key here
+    except Exception as e:
+        st.error(f"Failed to configure API key: {e}")
+        st.stop()
+
+    # Initialize the model
+    try:
+        model = genai.get_model('gemini-1.5-flash')
+    except Exception as e:
+        st.error(f"Failed to initialize the model: {e}")
+        st.stop()
 
     # Example list of uploaded files
     uploaded_files = []  # This should be populated with the actual uploaded files

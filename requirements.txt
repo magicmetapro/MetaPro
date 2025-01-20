@@ -21,3 +21,4 @@ pydrive
 pytz
 pydrive2
 uuid
+wand

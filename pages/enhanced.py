@@ -2,15 +2,15 @@ import streamlit as st
 import os
 import tempfile
 import csv
+import time
 from PIL import Image
 from wand.image import Image as WandImage
 import google.generativeai as genai
-from datetime import datetime, timedelta
+from datetime import datetime
 import pytz
 import re
 import unicodedata
 import traceback
-import math
 
 # Initialize Streamlit
 st.set_option("client.showSidebarNavigation", False)
@@ -75,30 +75,40 @@ def convert_svg_to_png(svg_file_path):
         st.error(traceback.format_exc())
         return None
 
-# Process files in chunks
-def process_files_in_chunks(model, svg_file_paths, chunk_size=6):
+# Process files in chunks with delay
+def process_files_in_chunks_with_delay(model, svg_file_paths, chunk_size=6, delay=10):
     results = []
-    for i in range(0, len(svg_file_paths), chunk_size):
-        batch = svg_file_paths[i:i + chunk_size]
-        st.write(f"Processing files {i + 1} to {min(i + chunk_size, len(svg_file_paths))}...")
+    total_chunks = len(svg_file_paths) // chunk_size + (1 if len(svg_file_paths) % chunk_size != 0 else 0)
+
+    for chunk_index in range(total_chunks):
+        start_index = chunk_index * chunk_size
+        end_index = min(start_index + chunk_size, len(svg_file_paths))
+        batch = svg_file_paths[start_index:end_index]
+        st.write(f"Processing files {start_index + 1} to {end_index}...")
+
         png_file_paths = [convert_svg_to_png(svg_file) for svg_file in batch]
         png_file_paths = [path for path in png_file_paths if path]  # Filter out failed conversions
+
         if png_file_paths:
             metadata = generate_metadata_batch(model, png_file_paths)
             if metadata:
-                for j, data in enumerate(metadata):
+                for i, data in enumerate(metadata):
                     results.append({
-                        'Filename': os.path.basename(batch[j]),
+                        'Filename': os.path.basename(batch[i]),
                         'Title': data['Title'],
                         'Keywords': data['Keywords'],
                         'Category': 3,  # Placeholder for category
                         'Releases': "Placeholder Name 1, Placeholder Name 2"  # Placeholder for releases
                     })
+
+        if chunk_index < total_chunks - 1:  # Avoid delay after the last chunk
+            st.write(f"Waiting {delay} seconds before processing the next batch...")
+            time.sleep(delay)
     return results
 
 # Main function
 def main():
-    st.title("Metadata Generator (Batch Processing)")
+    st.title("Metadata Generator (Batch Processing with Delay)")
 
     # License validation logic
     if not st.session_state['license_validated']:
@@ -137,8 +147,8 @@ def main():
                             temp_file.write(svg_file.read())
                         svg_file_paths.append(temp_svg_path)
 
-                    # Process files in chunks and generate metadata
-                    results = process_files_in_chunks(model, svg_file_paths, chunk_size=6)
+                    # Process files in chunks with delay
+                    results = process_files_in_chunks_with_delay(model, svg_file_paths, chunk_size=6, delay=10)
 
                     # Write results to CSV
                     with open(csv_file_path, 'w', newline='') as csvfile:

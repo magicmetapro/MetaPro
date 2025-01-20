@@ -44,13 +44,12 @@ def generate_metadata(model, img_path):
                 "Analyze the uploaded image and generate a comprehensive list of 45–50 relevant and specific keywords that encapsulate all aspects of the image, such as actions, objects, emotions, environment, and context. The first five keywords must be the most relevant. Ensure each keyword is a single word, separated by commas, and optimized for searchability and relevance.",
                 img
             ])
+            # Clean title (remove extra formatting)
+            cleaned_title = caption.text.strip()
+            # Clean keywords and ensure proper formatting (no extra commas)
             filtered_tags = re.sub(r'[^\w\s,]', '', tags.text)
             keywords = filtered_tags.split(',')[:49]
-            trimmed_tags = ','.join(keywords)
-
-            # Clean the Title and Keywords to remove unnecessary characters
-            cleaned_title = caption.text.strip()
-            cleaned_keywords = trimmed_tags.strip()
+            cleaned_keywords = ','.join([keyword.strip() for keyword in keywords])  # Strip any excess spaces
 
             return {
                 'Title': cleaned_title,
@@ -61,22 +60,7 @@ def generate_metadata(model, img_path):
         st.error(traceback.format_exc())
         return None
 
-# Convert SVG to PNG function
-def convert_svg_to_png(svg_file_path):
-    try:
-        png_file_path = svg_file_path.rsplit('.', 1)[0] + '.png'
-        with WandImage(filename=svg_file_path, format='svg') as img:
-            img.background_color = "white"
-            img.alpha_channel = 'remove'
-            img.format = "png"
-            img.save(filename=png_file_path)
-        return png_file_path
-    except Exception as e:
-        st.error(f"Error converting SVG to PNG: {e}")
-        st.error(traceback.format_exc())
-        return None
-
-# Process a single file
+# Process a single file function (keep the same)
 def process_file(args):
     api_key, file_path = args
     try:
@@ -106,7 +90,7 @@ def process_file(args):
         st.error(traceback.format_exc())
         return None
 
-# Main function
+# Main function (keep the same)
 def main():
     st.title("MetaPro")
 

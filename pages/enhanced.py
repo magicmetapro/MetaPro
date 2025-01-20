@@ -97,7 +97,7 @@ def process_file(args):
 
 # Main function
 def main():
-    st.title("Batch Metadata Generator with Delay and Multiprocessing")
+    st.title("MetaPro")
 
     # License validation
     if not st.session_state['license_validated']:

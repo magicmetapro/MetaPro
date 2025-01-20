@@ -70,10 +70,13 @@ def convert_svg_to_png(svg_file_path):
 
 # Process a single file
 def process_file(args):
-    api_key, svg_file_path = args
+    api_key, svg_file_path, progress_callback = args
     try:
         genai.configure(api_key=api_key)
         model = genai.GenerativeModel('gemini-1.5-flash')
+
+        # Show progress
+        progress_callback(svg_file_path)
 
         # Convert SVG to PNG
         png_file_path = convert_svg_to_png(svg_file_path)
@@ -136,7 +139,12 @@ def main():
 
                     # Prepare arguments for multiprocessing
                     api_keys = st.session_state['api_keys']
-                    args = [(api_keys[i % len(api_keys)], file) for i, file in enumerate(svg_file_paths)]
+                    progress = st.empty()
+
+                    def progress_callback(file_name):
+                        progress.write(f"Processing file: {os.path.basename(file_name)}")
+
+                    args = [(api_keys[i % len(api_keys)], file, progress_callback) for i, file in enumerate(svg_file_paths)]
 
                     # Process files in parallel
                     results = []

@@ -24,6 +24,12 @@ if 'license_validated' not in st.session_state:
 if 'api_key' not in st.session_state:
     st.session_state['api_key'] = None
 
+# List of 10 predefined API keys (replace with actual keys)
+API_KEYS = [
+    "AIzaSyBzKrjj-UwAVm-0MEjfSx3ShnJ4fDrsACU", "API_KEY_2", "API_KEY_3", "API_KEY_4", "API_KEY_5",
+    "API_KEY_6", "API_KEY_7", "API_KEY_8", "API_KEY_9", "API_KEY_10"
+]
+
 # Normalize text function
 def normalize_text(text, max_length=100):
     normalized = unicodedata.normalize('NFKD', text).encode('ascii', 'ignore').decode('utf-8')
@@ -75,7 +81,7 @@ def convert_svg_to_png(svg_file_path):
 
 # Main function
 def main():
-    st.title("")
+    st.title("Metadata Generator")
 
     # License validation logic
     if not st.session_state['license_validated']:
@@ -87,10 +93,14 @@ def main():
                 st.error("Invalid license key.")
         return
 
-    # API key input
-    api_key = st.text_input("Enter your [API](https://makersuite.google.com/app/apikey) Key:", value=st.session_state['api_key'] or '')
-    if api_key:
-        st.session_state['api_key'] = api_key
+    # API key selection dropdown
+    selected_api_key = st.selectbox("Select API Key", API_KEYS)
+
+    # Set the selected API key in session state
+    st.session_state['api_key'] = selected_api_key
+
+    # Show the selected API key (for debugging purposes)
+    st.write(f"Using API Key: {selected_api_key}")
 
     # Upload SVG files
     uploaded_files = st.file_uploader("Upload SVG Files", type="svg", accept_multiple_files=True)
@@ -99,7 +109,7 @@ def main():
         with st.spinner("Processing..."):
             try:
                 # Configure AI model
-                genai.configure(api_key=api_key)
+                genai.configure(api_key=selected_api_key)
                 model = genai.GenerativeModel('gemini-1.5-flash')
 
                 # Temporary directory for processing

@@ -86,6 +86,10 @@ def main():
                 st.error("Invalid license key.")
         return
 
+    
+    # Check if validation key is correct
+    valid_key = "a"
+
     # API key input
     api_key = st.text_input("Enter your [API](https://makersuite.google.com/app/apikey) Key:", value=st.session_state['api_key'] or '')
     if api_key:

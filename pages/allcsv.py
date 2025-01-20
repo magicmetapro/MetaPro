@@ -107,7 +107,14 @@ def save_partial_results(results, temp_dir):
             writer.writerow(result)
 
 # Function to process a batch of files using threading
-def process_batch(model, files_chunk, temp_dir, results):
+def process_batch(model, files_chunk, temp_dir, results, api_key):
+    # Set API key for the current batch
+    try:
+        genai.configure(api_key=api_key)
+    except Exception as e:
+        st.error(f"Failed to configure API key: {e}")
+        return
+
     for file in files_chunk:
         try:
             img = Image.open(file)
@@ -128,31 +135,35 @@ def process_batch(model, files_chunk, temp_dir, results):
 # Main function
 def main():
     """Main function for the Streamlit app."""
-    # Configure the API key for google.generativeai
-    try:
-        genai.configure(api_key="AIzaSyBzKrjj-UwAVm-0MEjfSx3ShnJ4fDrsACU")  # Set your actual API key here
-    except Exception as e:
-        st.error(f"Failed to configure API key: {e}")
-        st.stop()
-
-    # Initialize the model
+    # Configure the model
     try:
         model = genai.get_model('models/gemini-1.5-flash')
     except Exception as e:
         st.error(f"Failed to initialize the model: {e}")
         st.stop()
 
-    # Example list of uploaded files
-    uploaded_files = []  # This should be populated with the actual uploaded files
-    uploaded_files.append('path_to_image.jpg')  # Add sample image file for demonstration
+    # Image file upload
+    uploaded_files = st.file_uploader("Upload image files (JPG, PNG, JPEG, SVG)", accept_multiple_files=True)
+    if not uploaded_files:
+        st.warning("Please upload some image files to process.")
+        return
 
-    # Split the files into batches of 6
+    # Split files into batches of 6
     chunks = [uploaded_files[i:i + 6] for i in range(0, len(uploaded_files), 6)]
     threads = []
     results = []
     with tempfile.TemporaryDirectory() as temp_dir:
+        api_keys = [
+            "AIzaSyBzKrjj-UwAVm-0MEjfSx3ShnJ4fDrsACU", "API_KEY_2", "API_KEY_3", "API_KEY_4", "API_KEY_5", "API_KEY_6"
+        ]
+        api_key_index = 0
+
         for chunk in chunks:
-            thread = threading.Thread(target=process_batch, args=(model, chunk, temp_dir, results))
+            # Rotate API keys for each batch
+            current_api_key = api_keys[api_key_index % len(api_keys)]
+            api_key_index += 1
+
+            thread = threading.Thread(target=process_batch, args=(model, chunk, temp_dir, results, current_api_key))
             threads.append(thread)
             thread.start()
         

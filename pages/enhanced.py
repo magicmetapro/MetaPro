@@ -26,7 +26,7 @@ if 'api_key' not in st.session_state:
 
 # List of 10 predefined API keys (replace with actual keys)
 API_KEYS = [
-    "AIzaSyBzKrjj-UwAVm-0MEjfSx3ShnJ4fDrsACU", "API_KEY_2", "API_KEY_3", "API_KEY_4", "API_KEY_5",
+    "AIzaSyBzKrjj-UwAVm-0MEjfSx3ShnJ4fDrsACU", "AIzaSyDxUTWoiRvEobMcAZV70MO-ekXReWspSgo", "API_KEY_3", "API_KEY_4", "API_KEY_5",
     "API_KEY_6", "API_KEY_7", "API_KEY_8", "API_KEY_9", "API_KEY_10"
 ]
 

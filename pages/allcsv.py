@@ -137,7 +137,7 @@ def main():
 
     # Initialize the model
     try:
-        model = genai.get_model('gemini-1.5-flash')
+        model = genai.get_model('models/gemini-1.5-flash')
     except Exception as e:
         st.error(f"Failed to initialize the model: {e}")
         st.stop()

@@ -26,7 +26,7 @@ if 'api_key' not in st.session_state:
 
 # List of 10 predefined API keys (replace with actual keys)
 API_KEYS = [
-    "AIzaSyBzKrjj-UwAVm-0MEjfSx3ShnJ4fDrsACU", "AIzaSyDxUTWoiRvEobMcAZV70MO-ekXReWspSgo", "API_KEY_3", "API_KEY_4", "API_KEY_5",
+    "API_KEY_1", "API_KEY_2", "API_KEY_3", "API_KEY_4", "API_KEY_5",
     "API_KEY_6", "API_KEY_7", "API_KEY_8", "API_KEY_9", "API_KEY_10"
 ]
 
@@ -39,7 +39,6 @@ def normalize_text(text, max_length=100):
 # Generate metadata function
 def generate_metadata(model, img_path):
     try:
-        # Open the image as a PIL object
         with Image.open(img_path) as img:
             caption = model.generate_content([
                 "Analyze the uploaded image and generate a clear, descriptive, and professional one-line title suitable for a microstock image. The title should summarize the main subject, setting, key themes, and concepts, incorporating potential keywords for searches. Ensure it captures all relevant aspects, including actions, objects, emotions, environment, and context.",
@@ -57,7 +56,7 @@ def generate_metadata(model, img_path):
 
         return {
             'Title': caption.text.strip(),
-            'Tags': trimmed_tags.strip()
+            'Keywords': trimmed_tags.strip()
         }
     except Exception as e:
         st.error(f"Error generating metadata: {e}")
@@ -81,7 +80,7 @@ def convert_svg_to_png(svg_file_path):
 
 # Main function
 def main():
-    st.title("MetaPro")
+    st.title("Metadata Generator")
 
     # License validation logic
     if not st.session_state['license_validated']:
@@ -118,7 +117,7 @@ def main():
 
                     # Prepare CSV for writing metadata
                     with open(csv_file_path, 'w', newline='') as csvfile:
-                        fieldnames = ['File Name', 'Title', 'Tags']
+                        fieldnames = ['Filename', 'Title', 'Keywords', 'Category', 'Releases']
                         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                         writer.writeheader()
 
@@ -138,9 +137,11 @@ def main():
 
                                 if metadata:
                                     writer.writerow({
-                                        'File Name': os.path.basename(png_file_path),
+                                        'Filename': os.path.basename(png_file_path),
                                         'Title': metadata['Title'],
-                                        'Tags': metadata['Tags']
+                                        'Keywords': metadata['Keywords'],
+                                        'Category': 3,  # Placeholder for category
+                                        'Releases': "Placeholder Name 1, Placeholder Name 2"  # Placeholder for releases
                                     })
 
                     # Allow CSV download

@@ -33,7 +33,7 @@ def generate_metadata(model, img_path):
         with Image.open(img_path) as img:
             # Generate title
             caption = model.generate_content([
-                "generate every svg icon uploaded in a clear, descriptive, and professional one-line title suitable for a microstock image. The title should summarize the main subject, setting, key themes, and concepts, incorporating potential keywords for searches. Ensure it captures all relevant aspects, including actions, objects, emotions, environment, and context.",
+                "langsung title , generate in a clear, descriptive, and professional one-line title suitable for a microstock image. The title should summarize the main subject, setting, key themes, and concepts, incorporating potential keywords for searches. Ensure it captures all relevant aspects, including actions, objects, emotions, environment, and context.",
                 img
             ])
             # Generate keywords

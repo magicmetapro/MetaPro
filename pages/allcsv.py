@@ -130,7 +130,7 @@ def main():
     """Main function for the Streamlit app."""
     # Configure the API key for google.generativeai
     try:
-        genai.configure(api_key="YOUR_API_KEY")  # Set your actual API key here
+        genai.configure(api_key="AIzaSyBzKrjj-UwAVm-0MEjfSx3ShnJ4fDrsACU")  # Set your actual API key here
     except Exception as e:
         st.error(f"Failed to configure API key: {e}")
         st.stop()

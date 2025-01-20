@@ -81,14 +81,10 @@ def main():
         license_key = st.text_input("Enter your license key:", type="password")
         if st.button("Validate License"):
             if license_key == "valid_key":
-                st.session_state['license_validated'] = True
+                st.session_state['license_validated'] = False
             else:
                 st.error("Invalid license key.")
-        return
-
-    
-    # Check if validation key is correct
-    valid_key = "a"
+        retur
 
     # API key input
     api_key = st.text_input("Enter your [API](https://makersuite.google.com/app/apikey) Key:", value=st.session_state['api_key'] or '')

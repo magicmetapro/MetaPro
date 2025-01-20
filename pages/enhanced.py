@@ -75,7 +75,7 @@ def convert_svg_to_png(svg_file_path):
 
 # Main function
 def main():
-    st.title("SVG to PNG Converter with Metadata Generator for Adobe Stock")
+    st.title("")
 
     # License validation logic
     if not st.session_state['license_validated']:

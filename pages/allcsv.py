@@ -2,7 +2,6 @@ import streamlit as st
 import os
 import tempfile
 import csv
-import time
 from multiprocessing import Pool
 from PIL import Image
 from wand.image import Image as WandImage
@@ -82,9 +81,10 @@ def process_file(args):
         # Handle file format
         file_ext = os.path.splitext(file_path)[1].lower()
 
-        # For SVG, convert to PNG
+        # For SVG, convert to PNG and rename the file to `.svg`
         if file_ext == '.svg':
             file_path = convert_svg_to_png(file_path)
+            file_path = file_path.rsplit('.', 1)[0] + '.svg'  # Rename to .svg
 
         # Generate metadata
         metadata = generate_metadata(model, file_path)
